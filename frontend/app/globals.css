@@ -80,6 +80,11 @@
   --input: #d6ccbe;
   --ring: #b4471f;
 
+  /* Modal scrim. Its own token rather than a tint of the foreground: the
+     foreground inverts between themes and a scrim must not — a light scrim over
+     a dark page brightens the thing it is supposed to be pushing back. */
+  --overlay: rgb(28 25 23 / 0.45);
+
   --radius: 0.5rem;
 }
 
@@ -102,8 +107,10 @@
   --primary-surface: #2c1a11;
   --primary-border: #4a2a1b;
 
-  --ink: #231f1b;
-  --ink-foreground: #f5f1ec;
+  /* Lighter than any token surface so the band separates from the page on its
+     own, rather than relying on its border to be visible. */
+  --ink: #332c25;
+  --ink-foreground: #f7f3ee;
 
   --success: #a3c76a;
   --success-surface: #1b2412;
@@ -124,6 +131,7 @@
 
   --input: #413931;
   --ring: #e8734a;
+  --overlay: rgb(0 0 0 / 0.65);
 }
 
 @theme inline {
@@ -167,6 +175,7 @@
 
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-overlay: var(--overlay);
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);

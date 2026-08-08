@@ -12,6 +12,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { Wordmark } from "@/components/common/logo";
 import { cn } from "@/lib/utils";
 
 export interface NavItem {
@@ -60,20 +61,10 @@ export const navItems: NavItem[] = [
 
 export function ProductMark({ className }: { className?: string }) {
   return (
-    <Link
+    <Wordmark
       href="/dashboard"
-      className={cn(
-        "flex h-16 items-center gap-2.5 px-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        className,
-      )}
-    >
-      <span className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
-        <Sparkles aria-hidden="true" className="size-4" />
-      </span>
-      <span className="text-[15px] font-semibold tracking-tight text-foreground">
-        SupportMind
-      </span>
-    </Link>
+      className={cn("h-16 rounded-none px-5", className)}
+    />
   );
 }
 
@@ -129,7 +120,8 @@ export function Sidebar({
               "flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium text-foreground-muted transition-colors",
               "hover:bg-surface-hover hover:text-foreground",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              isActive && "bg-surface-hover text-foreground",
+              // Accent, not just a darker chip: where you are is worth colour.
+              isActive && "bg-primary-surface text-primary",
             )}
           >
             <Icon aria-hidden="true" className="size-[18px]" />

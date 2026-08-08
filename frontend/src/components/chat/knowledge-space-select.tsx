@@ -33,7 +33,7 @@ export function KnowledgeSpaceSelect({
         value={value ?? ""}
         onChange={(event) => onChange(event.target.value)}
         disabled={knowledgeSpaces.length <= 1}
-        className="h-9 w-full appearance-none truncate rounded-md border border-border bg-surface py-1 pl-3 pr-8 text-sm font-medium text-foreground outline-none transition-colors focus-visible:border-border-strong focus-visible:ring-2 focus-visible:ring-ring/10 disabled:cursor-default disabled:opacity-100"
+        className="h-9 w-full appearance-none truncate rounded-md border border-input bg-surface py-1 pl-3 pr-8 text-sm font-medium text-foreground outline-none transition-colors focus-visible:border-input focus-visible:ring-2 focus-visible:ring-ring/10 disabled:cursor-default disabled:opacity-100"
       >
         {knowledgeSpaces.map((knowledgeSpace) => (
           <option key={knowledgeSpace.id} value={knowledgeSpace.id}>

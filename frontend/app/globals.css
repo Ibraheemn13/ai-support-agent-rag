@@ -77,7 +77,7 @@
   --info-border: #c3d3f8;
 
   /* Form controls and focus */
-  --input: #d6ccbe;
+  --input: #948779;
   --ring: #b4471f;
 
   /* Modal scrim. Its own token rather than a tint of the foreground: the
@@ -129,7 +129,7 @@
   --info-surface: #151c2e;
   --info-border: #293761;
 
-  --input: #413931;
+  --input: #756b5f;
   --ring: #e8734a;
   --overlay: rgb(0 0 0 / 0.65);
 }
@@ -186,6 +186,38 @@
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 4px);
+}
+
+/*
+ * The ink bands are dark in *both* themes, which makes them a hole in the
+ * theming model: in light mode a child reading `--primary` gets #b4471f, a dark
+ * terracotta, and paints it onto near-black.
+ *
+ * So the band re-declares the tokens its children read rather than every child
+ * overriding classes at the call site. A `Button` inside `.on-ink` needs no
+ * special casing — it reads `--primary` as it always does and gets the value
+ * that is correct against ink.
+ */
+.on-ink {
+  --surface: #332c25;
+  --surface-subtle: #3a322a;
+  --surface-hover: #3d352c;
+
+  --foreground: #f7f3ee;
+  --foreground-muted: #bcb2a8;
+  --foreground-subtle: #9d938a;
+
+  --border: #473e35;
+  --border-strong: #574d43;
+
+  --primary: #e8734a;
+  --primary-hover: #f08a5d;
+  --primary-foreground: #1c1008;
+  --primary-surface: #40291d;
+  --primary-border: #5c3a28;
+
+  --input: #8c8175;
+  --ring: #e8734a;
 }
 
 * {

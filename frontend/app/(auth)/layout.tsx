@@ -16,7 +16,7 @@ export default function AuthLayout({
   return (
     <main className="grid min-h-dvh bg-surface lg:grid-cols-2">
       {/* Explanation panel; hidden on small screens so the form gets the space. */}
-      <section className="hidden bg-ink px-12 py-14 text-ink-foreground lg:flex lg:flex-col lg:justify-between">
+      <section className="on-ink hidden bg-ink px-12 py-14 text-ink-foreground lg:flex lg:flex-col lg:justify-between">
         <Wordmark href="/" tone="on-ink" />
 
         <div className="max-w-md pb-6">

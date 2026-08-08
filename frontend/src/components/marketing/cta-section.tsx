@@ -12,7 +12,7 @@ export function CtaSection() {
      * scenery instead of a signal — and it would leave the primary button with
      * nothing to stand out against.
      */
-    <section className="border-y border-border bg-ink py-16 sm:py-20">
+    <section className="on-ink border-y border-border bg-ink py-16 sm:py-20">
       <Container>
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="font-display text-3xl font-semibold text-ink-foreground sm:text-[2.5rem] sm:leading-[1.12]">

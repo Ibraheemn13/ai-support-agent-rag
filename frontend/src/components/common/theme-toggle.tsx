@@ -2,7 +2,6 @@
 
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +11,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useIsHydrated } from "@/hooks/use-is-hydrated";
 import { cn } from "@/lib/utils";
 
 const OPTIONS = [
@@ -29,14 +29,14 @@ const OPTIONS = [
  */
 export function ThemeToggle({ className }: { className?: string }) {
   const { theme, setTheme, resolvedTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
 
   // The server cannot know the stored preference, so the first client render
-  // must match the server's guess or React will report a mismatch. Rendering a
-  // fixed placeholder until after mount is what keeps the two in agreement.
-  useEffect(() => setMounted(true), []);
+  // has to match the server's guess or React reports a mismatch. This is the
+  // same hydration boundary the session reads across, so it uses the same hook
+  // rather than a second mount flag of its own.
+  const hydrated = useIsHydrated();
 
-  const Icon = !mounted ? Sun : resolvedTheme === "dark" ? Moon : Sun;
+  const Icon = hydrated && resolvedTheme === "dark" ? Moon : Sun;
 
   return (
     <DropdownMenu>
@@ -53,7 +53,7 @@ export function ThemeToggle({ className }: { className?: string }) {
 
       <DropdownMenuContent align="end" className="min-w-36">
         <DropdownMenuRadioGroup
-          value={mounted ? theme : undefined}
+          value={hydrated ? theme : undefined}
           onValueChange={setTheme}
         >
           {OPTIONS.map(({ value, label, icon: OptionIcon }) => (

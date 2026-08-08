@@ -58,6 +58,7 @@ const PAIRS = [
   ["--primary", "--primary-surface", "accent on its own tint", 4.5],
   ["--primary-foreground", "--primary", "primary button label", 4.5],
   ["--success", "--success-surface", "Ready badge", 4.5],
+  ["--success-foreground", "--success", "completed step marker", 4.5],
   ["--warning", "--warning-surface", "Processing badge", 4.5],
   ["--danger", "--danger-surface", "Failed badge", 4.5],
   ["--info", "--info-surface", "Extracted badge", 4.5],

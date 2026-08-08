@@ -47,7 +47,7 @@ export function DocumentStatusTimeline({
                   className={cn(
                     "flex size-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-medium",
                     isComplete &&
-                      "border-success bg-success text-primary-foreground",
+                      "border-success bg-success text-success-foreground",
                     isCurrent &&
                       "border-warning bg-warning-surface text-warning",
                     isFailedHere && "border-danger bg-danger-surface text-danger",

@@ -1,59 +1,129 @@
 @import "tailwindcss";
 
 /*
+ * Dark mode is driven by a class on <html>, written by next-themes, rather than
+ * by `prefers-color-scheme`. A media query cannot express "the user chose light
+ * on a machine set to dark", which is the whole point of having a toggle.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
  * SupportMind design tokens.
  *
- * The palette is deliberately neutral: a near-black primary rather than the
- * saturated blue or purple that reads as generic "AI product". Colour is
- * reserved for status, so a green or amber badge means something specific
- * instead of competing with decorative accents.
+ * The accent is a burnt terracotta and the neutrals are warmed to match: the
+ * background is paper rather than grey, and every "zinc" is a "stone". A single
+ * accent carries primary actions, active navigation, and the marked passage in
+ * the hero diagram; it is not sprinkled decoratively.
+ *
+ * Terracotta sits between the two status hues that matter most, so the status
+ * ramps are pushed away from it on purpose: success is olive rather than
+ * emerald, warning is gold rather than amber, and danger is crimson rather than
+ * orange-red. See ADR-046. The accent never renders as a status badge, so the
+ * two vocabularies never appear side by side.
+ *
+ * Light and dark are designed as a pair, not derived. Dark is not an inversion:
+ * surfaces step *up* in lightness as they come forward, the accent lightens to
+ * #E8734A because #B4471F on a dark ground is muddy and fails contrast, and the
+ * accent's foreground flips to near-black because the light accent no longer
+ * carries white text.
  *
  * Spacing follows Tailwind's default 4px scale; prefer multiples of 4 (and 8
  * for section rhythm) rather than arbitrary values.
  */
 :root {
   /* Surfaces */
-  --background: #fafafa;
+  --background: #fbf8f4;
   --surface: #ffffff;
-  --surface-subtle: #f4f4f5;
-  --surface-hover: #f4f4f5;
+  --surface-subtle: #f4efe8;
+  --surface-hover: #f1ebe2;
 
   /* Text */
-  --foreground: #09090b;
-  --foreground-muted: #52525b;
-  --foreground-subtle: #71717a;
+  --foreground: #1c1917;
+  --foreground-muted: #57534e;
+  --foreground-subtle: #78716c;
 
   /* Lines */
-  --border: #e4e4e7;
-  --border-strong: #d4d4d8;
+  --border: #e7e0d6;
+  --border-strong: #d6ccbe;
 
-  /* Primary action */
-  --primary: #18181b;
-  --primary-hover: #27272a;
+  /* Primary action — the accent */
+  --primary: #b4471f;
+  --primary-hover: #9c3c18;
   --primary-foreground: #ffffff;
+  --primary-surface: #fbede7;
+  --primary-border: #f0cdbe;
+
+  /* Ink: large branded bands (the closing CTA, the auth panel). Deliberately
+     not the accent — a full-bleed terracotta band is a wall of one colour. */
+  --ink: #1f1b18;
+  --ink-foreground: #fbf8f4;
 
   /* Status: each has a solid tone plus a surface/border pair for badges */
-  --success: #15803d;
-  --success-surface: #f0fdf4;
-  --success-border: #bbf7d0;
+  --success: #3f6212;
+  --success-surface: #f3f7ea;
+  --success-border: #cfe0ae;
 
-  --warning: #b45309;
-  --warning-surface: #fffbeb;
-  --warning-border: #fde68a;
+  --warning: #8a5a00;
+  --warning-surface: #fdf6e7;
+  --warning-border: #edd49b;
 
-  --danger: #b91c1c;
-  --danger-surface: #fef2f2;
-  --danger-border: #fecaca;
+  --danger: #a61b2b;
+  --danger-surface: #fcedee;
+  --danger-border: #f2c2c7;
+  --danger-foreground: #ffffff;
 
   --info: #1d4ed8;
-  --info-surface: #eff6ff;
-  --info-border: #bfdbfe;
+  --info-surface: #eef3fe;
+  --info-border: #c3d3f8;
 
   /* Form controls and focus */
-  --input: #d4d4d8;
-  --ring: #18181b;
+  --input: #d6ccbe;
+  --ring: #b4471f;
 
   --radius: 0.5rem;
+}
+
+.dark {
+  --background: #151311;
+  --surface: #1d1a17;
+  --surface-subtle: #252119;
+  --surface-hover: #2a251e;
+
+  --foreground: #f5f1ec;
+  --foreground-muted: #a8a099;
+  --foreground-subtle: #8a827a;
+
+  --border: #302a24;
+  --border-strong: #413931;
+
+  --primary: #e8734a;
+  --primary-hover: #f08a5d;
+  --primary-foreground: #1c1008;
+  --primary-surface: #2c1a11;
+  --primary-border: #4a2a1b;
+
+  --ink: #231f1b;
+  --ink-foreground: #f5f1ec;
+
+  --success: #a3c76a;
+  --success-surface: #1b2412;
+  --success-border: #354820;
+
+  --warning: #e3b75e;
+  --warning-surface: #2a2211;
+  --warning-border: #4a3d1c;
+
+  --danger: #f2848f;
+  --danger-surface: #2d1519;
+  --danger-border: #4e242a;
+  --danger-foreground: #2d1519;
+
+  --info: #8fb3f8;
+  --info-surface: #151c2e;
+  --info-border: #293761;
+
+  --input: #413931;
+  --ring: #e8734a;
 }
 
 @theme inline {
@@ -72,6 +142,11 @@
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-surface: var(--primary-surface);
+  --color-primary-border: var(--primary-border);
+
+  --color-ink: var(--ink);
+  --color-ink-foreground: var(--ink-foreground);
 
   --color-success: var(--success);
   --color-success-surface: var(--success-surface);
@@ -84,6 +159,7 @@
   --color-danger: var(--danger);
   --color-danger-surface: var(--danger-surface);
   --color-danger-border: var(--danger-border);
+  --color-danger-foreground: var(--danger-foreground);
 
   --color-info: var(--info);
   --color-info-surface: var(--info-surface);
@@ -94,6 +170,9 @@
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  /* No --font-display key here: `.font-display` is written by hand below so
+     that the family and its variation settings stay in one place. Declaring it
+     here as well would generate a second, competing utility of the same name. */
 
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
@@ -115,6 +194,23 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/*
+ * Fraunces is for display type only — hero and section headings. It is not
+ * applied to body copy, form labels, or dense UI text, where its character
+ * would cost legibility at the sizes the dashboard actually uses.
+ *
+ * WONK gives the italic-flavoured alternates a slight tilt and SOFT rounds the
+ * terminals; both are dialled well below their maxima so the result reads as
+ * considered rather than decorative.
+ */
+.font-display {
+  font-family: var(--font-fraunces), ui-serif, Georgia, serif;
+  font-variation-settings:
+    "SOFT" 25,
+    "WONK" 1;
+  letter-spacing: -0.022em;
+}
+
 button,
 a,
 input,
@@ -126,6 +222,19 @@ select {
 ::selection {
   color: var(--primary-foreground);
   background: var(--primary);
+}
+
+/*
+ * The browser's own widgets — scrollbars, form controls, the spellcheck
+ * underline — read the colour scheme rather than our tokens, so they stay light
+ * against a dark page unless told otherwise.
+ */
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
 }
 
 @media (prefers-reduced-motion: reduce) {

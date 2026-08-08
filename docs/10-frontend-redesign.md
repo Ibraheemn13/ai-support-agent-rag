@@ -119,6 +119,19 @@ Four breakpoints are treated as requirements: 360, 768, 1024, 1440.
 
 Verification is by measurement, not inspection: each page is loaded at each width and every element's right edge is compared against the viewport. That is how the 1024px table issue was found — the page looked fine because the table scrolled inside its own container rather than overflowing the document.
 
+## Visual identity
+
+A later pass replaced the neutral palette with a designed one. Structure, routing, and component logic were untouched; what changed is how it looks. Decisions are in [ADR-046](06-decisions.md).
+
+- **One accent, burnt terracotta** (`#b4471f` light, `#e8734a` dark), on primary actions, active navigation, section eyebrows, and the hero diagram. The status ramps were moved away from it — success olive, warning gold, danger crimson — because terracotta otherwise sits between amber and red and makes three meanings look like three shades of the brand.
+- **Fraunces on headings only**: the hero, marketing section headings, and in-app page titles. Everything denser stays on the UI sans.
+- **A hero diagram** of several documents converging into one cited answer, drawn from tokens so dark mode repaints it rather than needing a second asset.
+- **A mark** of three bars resolving into a dot — the hero diagram at 32×32 — with the same geometry in `app/icon.svg` for the favicon.
+- **Dark mode** via `next-themes`, class strategy, system default, persisted. The two palettes were designed together; dark is not an inversion.
+- **`.on-ink`** is a token scope for the two bands that are dark in both themes. Children read the tokens they always read and get values that are correct against ink, instead of overriding classes at each call site.
+
+Contrast is enforced rather than eyeballed: `npm run check:contrast` parses the tokens out of `globals.css` and asserts WCAG AA over both themes, failing the command if any pair drops below its floor.
+
 ## Component structure
 
 ```
@@ -199,7 +212,7 @@ Severity: **B** blocks deployment · **S** security · **R** reliability ·
 | 20 | Q | Sources are not deduplicated across chunks of the same document | 15 | Open |
 | 21 | P | No team management UI, although roles exist in the schema and API | — | Won't do for now |
 | 22 | P | Account details are read-only; no name, email, or password changes | — | Won't do for now |
-| 23 | P | No light/dark theme switching, although the tokens support it | — | Won't do for now |
+| 23 | P | No light/dark theme switching, although the tokens support it | Visual identity | Closed |
 | 24 | P | No copy, regenerate, edit, or delete on chat messages | — | Won't do for now |
 | 25 | E | Frontend had no automated tests | 11 | Closed |
 | 26 | E | No CI, so tests run only when invoked locally | 11b | Closed |

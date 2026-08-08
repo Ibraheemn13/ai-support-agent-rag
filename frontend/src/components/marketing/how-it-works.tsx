@@ -3,10 +3,10 @@ import { Section, SectionHeading } from "@/components/marketing/section";
 const steps = [
   {
     title: "Create your workspace",
-    body: "Set up a workspace for your team, then add a knowledge space for each area you want the assistant to cover.",
+    body: "Set up a workspace — for yourself or for your whole team — then add a knowledge space for each area you want the assistant to cover.",
   },
   {
-    title: "Upload support documents",
+    title: "Upload your documents",
     body: "Drop in PDFs, FAQs, policies, or product docs. One action prepares them for chat; you never touch a processing pipeline.",
   },
   {
@@ -27,7 +27,7 @@ export function HowItWorks() {
       <ol className="mt-12 grid gap-8 sm:grid-cols-3">
         {steps.map((step, index) => (
           <li key={step.title} className="relative">
-            <span className="flex size-8 items-center justify-center rounded-full border border-border bg-surface text-sm font-semibold text-foreground">
+            <span className="flex size-8 items-center justify-center rounded-full border border-primary-border bg-primary-surface text-sm font-semibold text-primary">
               {index + 1}
             </span>
             <h3 className="mt-4 text-base font-semibold text-foreground">

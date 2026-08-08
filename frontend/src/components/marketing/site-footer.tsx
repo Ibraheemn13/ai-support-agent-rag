@@ -1,6 +1,6 @@
-import { Sparkles } from "lucide-react";
 import Link from "next/link";
 
+import { Wordmark } from "@/components/common/logo";
 import { Container } from "@/components/marketing/section";
 
 const footerLinks = [
@@ -15,17 +15,10 @@ export function SiteFooter() {
       <Container>
         <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
           <div className="max-w-sm">
-            <div className="flex items-center gap-2.5">
-              <span className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                <Sparkles aria-hidden="true" className="size-4" />
-              </span>
-              <span className="text-[15px] font-semibold tracking-tight text-foreground">
-                SupportMind
-              </span>
-            </div>
+            <Wordmark href="/" />
             <p className="mt-3 text-sm leading-6 text-foreground-muted">
-              An AI support assistant that answers from your own documents and
-              shows its sources.
+              An AI assistant that answers from your own documents and shows its
+              sources.
             </p>
           </div>
 
@@ -48,10 +41,18 @@ export function SiteFooter() {
           </nav>
         </div>
 
-        <div className="mt-10 border-t border-border pt-6">
+        <div className="mt-10 flex flex-col gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-foreground-subtle">
             A portfolio project demonstrating retrieval-augmented generation
             over multi-tenant document storage.
+          </p>
+          {/* One of two places on the site allowed to have a voice. */}
+          <p className="flex items-center gap-2 text-xs text-foreground-subtle">
+            <span
+              aria-hidden="true"
+              className="size-1.5 shrink-0 rounded-full bg-success"
+            />
+            All systems answering — and still refusing to make anything up.
           </p>
         </div>
       </Container>

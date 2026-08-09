@@ -71,6 +71,44 @@ export async function getDocument(
   return response.data;
 }
 
+export interface DocumentFile {
+  blob: Blob;
+  /** Media type only, with any charset parameter stripped. */
+  contentType: string;
+}
+
+/**
+ * Fetch the original upload back, for reading in the browser.
+ *
+ * Requested through the client rather than pointed at with a plain `<a href>`
+ * or an `<iframe src>`, because the session is a bearer token in
+ * `localStorage` and neither of those can carry a header. The caller turns the
+ * blob into an object URL, and owns revoking it.
+ *
+ * A `410` means the row outlived its bytes: uploads currently sit on the
+ * container filesystem, so a restart empties it. Callers should say that
+ * rather than reporting the document as missing.
+ */
+export async function fetchDocumentFile(
+  organizationId: UUID,
+  documentId: UUID,
+): Promise<DocumentFile> {
+  const response = await apiClient.get<Blob>(
+    `${organizationPath(organizationId)}/documents/${encodeURIComponent(
+      documentId,
+    )}/file`,
+    { responseType: "blob" },
+  );
+
+  const header = response.headers["content-type"];
+  const contentType =
+    (typeof header === "string" ? header.split(";")[0]?.trim() : "") ||
+    response.data.type ||
+    "application/octet-stream";
+
+  return { blob: response.data, contentType };
+}
+
 export async function uploadDocument(
   organizationId: UUID,
   knowledgeBaseId: UUID,
@@ -163,6 +201,7 @@ export async function deleteDocument(
 export const documentsApi = {
   list: listDocuments,
   get: getDocument,
+  file: fetchDocumentFile,
   upload: uploadDocument,
   prepare: prepareDocument,
   ingest: ingestDocument,

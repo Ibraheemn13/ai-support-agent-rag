@@ -49,6 +49,17 @@ class DocumentStorageError(Exception):
     pass
 
 
+class DocumentFileUnavailableError(Exception):
+    """The row exists but its bytes do not.
+
+    Distinct from `DocumentNotFoundError` because the two need different
+    answers: one means "no such document", the other means "this document is
+    real, and the file behind it is gone". Uploads currently live on the
+    container filesystem, so every file disappears on a restart — the caller
+    has to be able to say that rather than claim the document never existed.
+    """
+
+
 class DocumentBusyError(Exception):
     """A worker may be part-way through this document right now.
 
@@ -179,6 +190,37 @@ class DocumentService:
         if document is None:
             raise DocumentNotFoundError
         return document
+
+    def open_file(
+        self,
+        *,
+        organization_id: uuid.UUID,
+        document_id: uuid.UUID,
+    ) -> tuple[Document, Path]:
+        """Locate the stored upload behind a document, for serving back.
+
+        The path is read from the database and then checked to be inside the
+        upload root before it is opened. That check is not defending against
+        today's writer — `upload` builds the path itself from generated UUIDs —
+        but against this column ever carrying a value it did not write. A
+        filesystem read assembled from a database string is exactly the shape
+        of a path traversal, and the containment check costs one comparison.
+        """
+        document = self.get(
+            organization_id=organization_id,
+            document_id=document_id,
+        )
+        if not document.file_path:
+            raise DocumentFileUnavailableError
+
+        upload_root = resolve_storage_path(settings.upload_dir)
+        stored_path = resolve_storage_path(document.file_path)
+        if not stored_path.is_relative_to(upload_root):
+            raise DocumentFileUnavailableError
+        if not stored_path.is_file():
+            raise DocumentFileUnavailableError
+
+        return document, stored_path
 
     def delete(
         self,

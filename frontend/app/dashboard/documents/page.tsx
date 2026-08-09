@@ -179,6 +179,7 @@ export default function DocumentsPage() {
               */}
               <div className="hidden xl:block">
                 <DocumentTable
+                  workspaceId={workspaceId!}
                   documents={documents}
                   knowledgeSpaceNames={knowledgeSpaceNames}
                   onPrepare={prepare}
@@ -192,6 +193,7 @@ export default function DocumentsPage() {
                 {documents.map((document) => (
                   <DocumentMobileCard
                     key={document.id}
+                    workspaceId={workspaceId!}
                     document={document}
                     knowledgeSpaceName={knowledgeSpaceNames.get(
                       document.knowledge_base_id,

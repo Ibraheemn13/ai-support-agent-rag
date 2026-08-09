@@ -6,10 +6,12 @@ import Link from "next/link";
 import { StatusBadge } from "@/components/common/status-badge";
 import { DeleteDocumentAction } from "@/components/documents/delete-document-action";
 import { DocumentActions } from "@/components/documents/document-actions";
+import { ViewDocumentAction } from "@/components/documents/view-document-action";
 import { formatRelativeDate } from "@/lib/utils";
 import type { KnowledgeDocument } from "@/types/document";
 
 interface DocumentTableProps {
+  workspaceId: string;
   documents: KnowledgeDocument[];
   /** Maps knowledge space id to name, so no raw id reaches the page. */
   knowledgeSpaceNames: Map<string, string>;
@@ -21,6 +23,7 @@ interface DocumentTableProps {
 
 /** Desktop presentation. The mobile card list renders the same data. */
 export function DocumentTable({
+  workspaceId,
   documents,
   knowledgeSpaceNames,
   onPrepare,
@@ -107,6 +110,10 @@ export function DocumentTable({
                     document={document}
                     onPrepare={onPrepare}
                     isSubmitting={preparingDocumentId === document.id}
+                  />
+                  <ViewDocumentAction
+                    workspaceId={workspaceId}
+                    document={document}
                   />
                   <DeleteDocumentAction
                     document={document}

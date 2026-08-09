@@ -191,7 +191,7 @@ Severity: **B** blocks deployment · **S** security · **R** reliability ·
 | # | Sev | Limitation | Closed by | Status |
 | --- | --- | --- | --- | --- |
 | 1 | B | CORS middleware only registers when `APP_ENV` is a local value, so a deployed frontend is blocked by the browser | 18 | Open |
-| 2 | B | Uploads written to the container filesystem, which is ephemeral on most hosts | 18 | Open |
+| 2 | B | Uploads written to the container filesystem, which is ephemeral on most hosts. Now also user-visible: viewing a document's original file depends on it (ADR-047) | 18 | Open |
 | 3 | B | JWT secret falls back to a known default instead of failing loudly | 18 | Open |
 | 4 | S | Tokens in `localStorage`; an XSS bug becomes a session compromise (ADR-021) | 13 | Open |
 | 5 | S | Sessions expire hard at 60 minutes with no refresh | 13 | Accepted tradeoff |

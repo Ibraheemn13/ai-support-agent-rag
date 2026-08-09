@@ -6,10 +6,12 @@ import Link from "next/link";
 import { StatusBadge } from "@/components/common/status-badge";
 import { DeleteDocumentAction } from "@/components/documents/delete-document-action";
 import { DocumentActions } from "@/components/documents/document-actions";
+import { ViewDocumentAction } from "@/components/documents/view-document-action";
 import { formatRelativeDate } from "@/lib/utils";
 import type { KnowledgeDocument } from "@/types/document";
 
 interface DocumentMobileCardProps {
+  workspaceId: string;
   document: KnowledgeDocument;
   knowledgeSpaceName?: string;
   onPrepare: (documentId: string, force?: boolean) => void;
@@ -20,6 +22,7 @@ interface DocumentMobileCardProps {
 
 /** Stacked presentation of a table row, for viewports too narrow to scan columns. */
 export function DocumentMobileCard({
+  workspaceId,
   document,
   knowledgeSpaceName,
   onPrepare,
@@ -65,6 +68,7 @@ export function DocumentMobileCard({
           onPrepare={onPrepare}
           isSubmitting={isSubmitting}
         />
+        <ViewDocumentAction workspaceId={workspaceId} document={document} />
         <DeleteDocumentAction
           document={document}
           onDelete={onDelete}

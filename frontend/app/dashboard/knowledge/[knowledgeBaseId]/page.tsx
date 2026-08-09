@@ -14,6 +14,7 @@ import { LoadingSkeleton } from "@/components/common/loading-skeleton";
 import { PageHeader } from "@/components/common/page-header";
 import { DeleteDocumentAction } from "@/components/documents/delete-document-action";
 import { DocumentActions } from "@/components/documents/document-actions";
+import { ViewDocumentAction } from "@/components/documents/view-document-action";
 import { DocumentDropzone } from "@/components/documents/document-dropzone";
 import { DeleteKnowledgeSpaceAction } from "@/components/knowledge/delete-knowledge-space-action";
 import { Button } from "@/components/ui/button";
@@ -233,6 +234,10 @@ export default function KnowledgeSpaceDetailPage() {
                   document={document}
                   onPrepare={prepare}
                   isSubmitting={preparingDocumentId === document.id}
+                />
+                <ViewDocumentAction
+                  workspaceId={workspaceId!}
+                  document={document}
                 />
                 <DeleteDocumentAction
                   document={document}

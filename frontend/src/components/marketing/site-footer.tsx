@@ -41,11 +41,7 @@ export function SiteFooter() {
           </nav>
         </div>
 
-        <div className="mt-10 flex flex-col gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-foreground-subtle">
-            A portfolio project demonstrating retrieval-augmented generation
-            over multi-tenant document storage.
-          </p>
+        <div className="mt-10 flex border-t border-border pt-6">
           {/* One of two places on the site allowed to have a voice. */}
           <p className="flex items-center gap-2 text-xs text-foreground-subtle">
             <span

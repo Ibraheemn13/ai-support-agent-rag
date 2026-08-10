@@ -194,7 +194,7 @@ Severity: **B** blocks deployment · **S** security · **R** reliability ·
 | 2 | B | Uploads written to the container filesystem, which is ephemeral on most hosts. Now also user-visible: viewing a document's original file depends on it (ADR-047) | 18 | Closed |
 | 3 | B | JWT secret falls back to a known default instead of failing loudly | 18 | Closed |
 | 4 | S | Tokens in `localStorage`; an XSS bug becomes a session compromise (ADR-021) | 13 | Open |
-| 5 | S | Sessions expire hard at 60 minutes with no refresh | 13 | Accepted tradeoff |
+| 5 | S | Sessions expire hard at 60 minutes with no refresh | Refresh tokens | Closed — rotating refresh tokens with reuse detection (ADR-051) |
 | 6 | S | No rate limiting: login is brute-forceable and chat spend is uncapped | 13 | Closed |
 | 7 | S | No email verification or password reset | — | Won't do for now |
 | 8 | S | Tenant isolation enforced in application queries, not Postgres RLS (ADR-001) | 13 | Closed |

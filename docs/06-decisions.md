@@ -254,7 +254,7 @@ The scope is taken from the client-supplied path or header, which is safe becaus
 
 ## ADR-039: localStorage and a Sixty-Minute Session, Stated Rather Than Fixed
 
-Status: Accepted, with known cost
+Status: Accepted for `localStorage`; the session-length half is superseded by ADR-051
 
 The access token stays in `localStorage` (ADR-021) and still expires after sixty minutes with no refresh token. Both are shortcuts, and this records what they cost and why they were kept.
 
@@ -449,3 +449,23 @@ remain durable. Those are acceptable demo constraints and named in the deploy
 guide. A paid deployment splits API and worker services, enables persistent
 queue storage, runs migrations as a release step, and schedules the stale-work
 sweep independently.
+
+## ADR-051: Rotating Refresh Tokens, Because the Session Was Failing People Mid-Task
+
+Status: Accepted
+
+ADR-039 recorded a sixty-minute session with no refresh as a known cost and named the work that would fix it: "rotation, reuse detection, and a revocation store". This is that work. The trigger was not theory — the expiry was interrupting ordinary use often enough to be the most-felt defect in the product, and shipping it to a deployment where sessions matter would have made it worse.
+
+**The refresh token is opaque and random, not a JWT.** The entire point of this table is that a session can be ended. A self-describing token is valid until its own `exp` no matter what the server has since decided, which is precisely the property a sign-out must not have. Thirty-two bytes of `urandom` carries no claims and means nothing without the row it points at, so revocation is a single `UPDATE`.
+
+**Only a hash is stored.** Same reasoning as passwords: a leaked database should not hand over live sessions. It is SHA-256 rather than a password hash, and that is deliberate in both directions — a slow hash exists to make guessing a low-entropy human secret expensive, which buys nothing against 256 bits of `urandom`, and more practically a salted hash cannot be looked up, while every refresh has to find its row by the token presented.
+
+**Rotation is what makes a long-lived credential in `localStorage` defensible.** Each refresh spends the old token and issues a new one, so a stolen copy stops working the moment the real client refreshes. That narrows the window from "thirty days" to "until the user's next request", which is usually seconds.
+
+**Reuse is treated as theft.** Presenting an already-rotated token means two holders share one lineage, and there is no way to tell which is the legitimate one — so the whole family is revoked rather than guessing. The real user signs in again; the attacker's copy dies with it. Failing safe here costs one login and is the only option that does not silently favour the thief.
+
+**One error for unknown, expired, and revoked.** Distinguishing them would tell someone holding a stolen token whether it was ever real, and all three have the same remedy. `logout` likewise returns `204` for tokens that never existed, so sign-out is not an oracle either.
+
+**The client refreshes single-flight.** This is the non-obvious part, and skipping it would have made the feature actively harmful: a dashboard issues several requests at once, so an expired access token produces several simultaneous `401`s. Refreshing per-request means the first succeeds and the rest replay a token that was just spent — which this design correctly reads as theft and answers by revoking the session. Without a shared in-flight promise, adding refresh tokens would log people out *more* reliably than having none. The retry is also capped at one attempt and never applies to `/auth/refresh` itself, so a genuinely dead session ends instead of looping.
+
+**What this does not fix.** Both tokens still live in `localStorage`, so ADR-039's first half stands unchanged and limitation 4 stays open — an XSS still yields a session, and now the more valuable half of one. Rotation bounds the damage rather than removing it. `HttpOnly` cookies remain the right end state, and remain a larger change than this one: a cookie-setting login endpoint, CSRF protection, and credentialed CORS across two origins.

@@ -30,7 +30,10 @@ export function PageHeader({
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+        {/* The one place the display face appears inside the app. Page titles
+            are the only in-app heading with room for it; card titles, table
+            headers, and form labels stay on the UI sans. */}
+        <h1 className="font-display text-2xl font-semibold text-foreground sm:text-[1.9rem]">
           {title}
         </h1>
         {description ? (

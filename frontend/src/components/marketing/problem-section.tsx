@@ -3,11 +3,11 @@ import { Section, SectionHeading } from "@/components/marketing/section";
 const problems = [
   {
     title: "The answer exists, but nobody can find it",
-    body: "Policies live in a PDF, the exception lives in a wiki page, and the person who knew both left last year.",
+    body: "The policy lives in a PDF, the exception lives in a note somewhere else, and neither is where you looked first.",
   },
   {
     title: "General AI tools invent the details",
-    body: "A model trained on the open web will confidently describe a refund window your company never offered.",
+    body: "A model trained on the open web will confidently describe a refund window you never offered.",
   },
   {
     title: "Nobody trusts an answer they can't check",
@@ -20,8 +20,8 @@ export function ProblemSection() {
     <Section muted>
       <SectionHeading
         eyebrow="The problem"
-        title="Support knowledge is written down. It just isn't answerable."
-        description="Most teams already have the documentation they need. What they lack is a way to ask it a question and get an answer they can trust."
+        title="The knowledge is written down. It just isn't answerable."
+        description="You already have the documents you need. What's missing is a way to ask them a question and get back an answer you can check."
       />
 
       <div className="mt-12 grid gap-6 sm:grid-cols-3">

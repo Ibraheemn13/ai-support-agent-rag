@@ -1,0 +1,79 @@
+services:
+  - type: keyvalue
+    name: supportmind-redis
+    plan: free
+    region: oregon
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+
+  - type: web
+    name: supportmind-api
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: bash start-render.sh
+    healthCheckPath: /health
+    maxShutdownDelaySeconds: 120
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: LOG_JSON
+        value: "true"
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: MIGRATION_DATABASE_URL
+        sync: false
+      - key: APP_DB_ROLE
+        value: supportmind_app
+      - key: APP_DB_PASSWORD
+        sync: false
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: REDIS_URL
+        fromService:
+          name: supportmind-redis
+          type: keyvalue
+          property: connectionString
+      - key: STORAGE_BACKEND
+        value: s3
+      - key: S3_ENDPOINT_URL
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_PREFIX
+        value: uploads
+      - key: AUTO_INGEST_ON_UPLOAD
+        value: "false"
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: DAILY_BUDGET_ENABLED
+        value: "true"
+      - key: OPENAI_API_KEY
+        sync: false
+
+  - type: web
+    name: supportmind-web
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NEXT_PUBLIC_API_BASE_URL
+        sync: false

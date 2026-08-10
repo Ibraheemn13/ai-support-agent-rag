@@ -13,7 +13,7 @@ const features = [
   {
     icon: FileSearch,
     title: "Document-based answers",
-    body: "Replies are generated from the documents you uploaded, so the assistant stays inside what your company actually published.",
+    body: "Replies are generated from the documents you uploaded, so the assistant stays inside what you actually published.",
   },
   {
     icon: Quote,
@@ -23,7 +23,7 @@ const features = [
   {
     icon: Layers,
     title: "Multi-workspace support",
-    body: "Keep separate workspaces for different teams or products, each with its own knowledge spaces.",
+    body: "Keep separate workspaces for different clients, products, or teams, each with its own knowledge spaces.",
   },
   {
     icon: History,

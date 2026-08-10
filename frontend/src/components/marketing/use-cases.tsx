@@ -3,7 +3,7 @@ import { Section, SectionHeading } from "@/components/marketing/section";
 const useCases = [
   {
     title: "Customer support",
-    body: "Give agents a fast way to check refund windows, shipping rules, and account policies without opening four documents.",
+    body: "Give yourself, or a whole team of agents, a fast way to check refund windows, shipping rules, and account policies without opening four documents.",
     example: "“How long does a customer have to return an opened item?”",
   },
   {
@@ -18,8 +18,8 @@ const useCases = [
   },
   {
     title: "Policies and FAQs",
-    body: "Keep HR and compliance answers consistent by grounding them in the current published policy.",
-    example: "“How much notice is required for parental leave?”",
+    body: "Answer the same client question the same way every time, straight from the terms you actually published.",
+    example: "“What are my revision limits on a fixed-price project?”",
   },
 ];
 

@@ -1,9 +1,11 @@
 "use client";
 
-import { Menu, Sparkles, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { Wordmark } from "@/components/common/logo";
+import { ThemeToggle } from "@/components/common/theme-toggle";
 import { Container } from "@/components/marketing/section";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth/auth-context";
@@ -24,17 +26,7 @@ export function LandingHeader() {
     <header className="sticky top-0 z-40 border-b border-border bg-surface/95 backdrop-blur-sm">
       <Container>
         <div className="flex h-16 items-center justify-between gap-4">
-          <Link
-            href="/"
-            className="flex items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <span className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <Sparkles aria-hidden="true" className="size-4" />
-            </span>
-            <span className="text-[15px] font-semibold tracking-tight text-foreground">
-              SupportMind
-            </span>
-          </Link>
+          <Wordmark href="/" />
 
           <nav aria-label="Sections" className="hidden items-center gap-1 md:flex">
             {sectionLinks.map((link) => (
@@ -49,6 +41,7 @@ export function LandingHeader() {
           </nav>
 
           <div className="hidden items-center gap-2 md:flex">
+            <ThemeToggle />
             {isSignedIn ? (
               <Button asChild size="sm">
                 <Link href="/dashboard">Go to dashboard</Link>
@@ -65,20 +58,22 @@ export function LandingHeader() {
             )}
           </div>
 
-          <Button
-            aria-label={menuOpen ? "Close menu" : "Open menu"}
-            aria-expanded={menuOpen}
-            className="md:hidden"
-            onClick={() => setMenuOpen((open) => !open)}
-            size="icon"
-            variant="ghost"
-          >
-            {menuOpen ? (
-              <X aria-hidden="true" />
-            ) : (
-              <Menu aria-hidden="true" />
-            )}
-          </Button>
+          <div className="flex items-center gap-1 md:hidden">
+            <ThemeToggle />
+            <Button
+              aria-label={menuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((open) => !open)}
+              size="icon"
+              variant="ghost"
+            >
+              {menuOpen ? (
+                <X aria-hidden="true" />
+              ) : (
+                <Menu aria-hidden="true" />
+              )}
+            </Button>
+          </div>
         </div>
       </Container>
 

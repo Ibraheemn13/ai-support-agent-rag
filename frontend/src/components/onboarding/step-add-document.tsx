@@ -115,9 +115,14 @@ export function StepAddDocument({
       ) : null}
 
       {preparation.isWorking && !preparation.hasFailed ? (
+        /*
+         * The second and last place with a voice. It can afford one here
+         * because the timeline directly above already reports the literal
+         * progress — this line is doing reassurance, not status.
+         */
         <p className="mt-4 flex items-center gap-2 text-sm text-foreground-muted">
           <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
-          Preparing your document…
+          Reading it properly, so it can quote you later.
         </p>
       ) : null}
     </div>

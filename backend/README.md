@@ -8,7 +8,9 @@ FastAPI backend for AI Support Agent RAG.
 - SQLAlchemy
 - Alembic
 - Pydantic Settings
-- PostgreSQL
+- PostgreSQL + pgvector
+- Redis/RQ
+- Local or S3-compatible private file storage
 
 ## Project Structure
 
@@ -37,7 +39,7 @@ backend/
 
 ## Local Setup
 
-1. Create a virtual environment:
+1. From `backend/`, create a virtual environment:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -48,9 +50,10 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-3. Set up environment variables (`.env` file is already configured):
+3. Create the backend environment file from the tracked root template:
 ```powershell
-# If needed, update backend/.env with your local settings
+Copy-Item ..\.env.example .env
+# Then set OPENAI_API_KEY in backend/.env.
 ```
 
 4. Run the backend from the repository root with one of these methods:
@@ -112,9 +115,16 @@ FRONTEND_ORIGIN=http://localhost:3000
 JWT_SECRET_KEY=change-me-in-development
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
+STORAGE_BACKEND=local
 UPLOAD_DIR=storage/uploads
+S3_ENDPOINT_URL=
+S3_REGION=us-east-1
+S3_BUCKET=
+S3_ACCESS_KEY_ID=
+S3_SECRET_ACCESS_KEY=
+S3_PREFIX=uploads
 MAX_UPLOAD_SIZE_MB=10
-AUTO_INGEST_ON_UPLOAD=true
+AUTO_INGEST_ON_UPLOAD=false
 CHUNK_SIZE=1200
 CHUNK_OVERLAP=200
 OPENAI_API_KEY=
@@ -143,6 +153,8 @@ Available endpoints:
 - `POST /api/v1/organizations/{organization_id}/knowledge-bases/{knowledge_base_id}/documents/upload`
 - `GET /api/v1/organizations/{organization_id}/documents`
 - `GET /api/v1/organizations/{organization_id}/documents/{document_id}`
+- `GET /api/v1/organizations/{organization_id}/documents/{document_id}/file`
+- `POST /api/v1/organizations/{organization_id}/documents/{document_id}/prepare`
 - `POST /api/v1/organizations/{organization_id}/documents/{document_id}/ingest`
 - `POST /api/v1/organizations/{organization_id}/documents/{document_id}/index`
 - `POST /api/v1/organizations/{organization_id}/knowledge-bases/{knowledge_base_id}/search`
@@ -192,7 +204,11 @@ curl.exe -X POST http://127.0.0.1:8000/api/v1/organizations/ORGANIZATION_ID/know
   -F "file=@C:\path\to\getting-started.txt;type=text/plain"
 ```
 
-Uploads create a `pending` document. Background ingestion changes it to `processing`, then `processed` or `failed`. A later embedding phase will move processed documents to `indexed`. Files are stored under `storage/uploads/{organization_id}/{knowledge_base_id}/`.
+Uploads create a `pending` document. The prepare job changes it to `processing`,
+then `processed`, `indexed`, or `failed`. With `STORAGE_BACKEND=local`, files
+live under `storage/uploads/{organization_id}/{knowledge_base_id}/`. With
+`STORAGE_BACKEND=s3`, that tenant-qualified layout is an object key in the
+configured private bucket.
 
 Manually schedule ingestion:
 
@@ -321,3 +337,10 @@ RQ's default worker forks a child process per job and enforces timeouts with
 with a thread-based timeout instead. Jobs then run inside the worker process, so
 a job that hard-crashes the interpreter takes the worker with it. Deployment
 targets Linux, where the forking worker is used.
+
+## Deployment
+
+The root `render.yaml` deploys this backend with its RQ worker in one free
+Render web service and stores files in private Supabase Storage. See
+[`docs/11-supabase-render-deployment.md`](../docs/11-supabase-render-deployment.md)
+for the database URLs, S3 settings, migration flow, and verification steps.

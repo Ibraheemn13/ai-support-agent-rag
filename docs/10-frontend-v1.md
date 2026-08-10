@@ -211,7 +211,11 @@ The backend development configuration uses:
 FRONTEND_ORIGIN=http://localhost:3000
 ```
 
-FastAPI enables its narrowly scoped CORS middleware only when `APP_ENV` is `local`, `development`, or `dev`. The configured frontend origin is the sole allowed origin; the API is not opened to `*`. If the frontend port changes, update `FRONTEND_ORIGIN` to the exact browser origin and restart the API.
+FastAPI always enables narrowly scoped CORS middleware. The configured frontend
+origin is the sole allowed origin; the API is not opened to `*`. Outside local
+development, startup fails when `FRONTEND_ORIGIN` is empty so a broken deploy is
+visible immediately. If the frontend URL changes, update it to the exact browser
+origin and restart the API.
 
 ## Manual Test Flow
 

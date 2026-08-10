@@ -1,5 +1,6 @@
 import uuid
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import (
     APIRouter,
@@ -12,7 +13,9 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from starlette.background import BackgroundTask
 
 from app.api.deps import (
     IngestionRunner,
@@ -28,6 +31,7 @@ from app.schemas.document import DocumentPage, DocumentResponse
 from app.schemas.pagination import InvalidCursorError
 from app.services.document_service import (
     DocumentBusyError,
+    DocumentFileUnavailableError,
     DocumentNotFoundError,
     DocumentService,
     DocumentStorageError,
@@ -86,7 +90,7 @@ async def upload_document(
         )
     except DocumentStorageError:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Could not store the uploaded document",
         )
     if settings.auto_ingest_on_upload:
@@ -158,6 +162,78 @@ def get_document(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found",
         )
+
+
+@router.get("/documents/{document_id}/file")
+def get_document_file(
+    organization_id: uuid.UUID,
+    document_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+    _membership: Annotated[
+        OrganizationMember,
+        Depends(require_organization_member),
+    ],
+) -> StreamingResponse:
+    """Serve the original upload back, for reading in the browser.
+
+    Any member may read it: the file is already the source of the answers the
+    same member can ask for, so withholding it would protect nothing.
+    """
+    try:
+        document, stream = DocumentService(db).open_file(
+            organization_id=organization_id,
+            document_id=document_id,
+        )
+    # Both failures carry no-store because 404 and 410 are cacheable by
+    # default (RFC 9110). Observed: a browser pinned a 410 and went on
+    # reporting the file as gone after it had been restored — which is the
+    # normal recovery case when the object is restored without replacing its
+    # database row.
+    except DocumentNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+            headers={"Cache-Control": "no-store"},
+        )
+    except DocumentFileUnavailableError:
+        # 410 rather than 404: the document is real and still listed, so
+        # "not found" would send the reader looking for the wrong problem.
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail=(
+                "The original file for this document is no longer stored. "
+                "Its prepared passages are still searchable."
+            ),
+            headers={"Cache-Control": "no-store"},
+        )
+    except DocumentStorageError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Document storage is temporarily unavailable",
+            headers={"Cache-Control": "no-store"},
+        )
+
+    filename = document.file_name or document.title
+    return StreamingResponse(
+        stream.chunks,
+        media_type=document.mime_type or "application/octet-stream",
+        # Inline so the browser renders it instead of downloading it. That
+        # means serving bytes a user uploaded, from our own origin, under a
+        # type we recorded at upload from the client's own claim — so pin the
+        # type down. Without nosniff a .txt full of markup can be sniffed as
+        # HTML and run as this origin.
+        headers={
+            "Content-Disposition": (
+                f"inline; filename*=UTF-8''{quote(filename, safe='')}"
+            ),
+            "X-Content-Type-Options": "nosniff",
+            # One tenant's documents, on an endpoint whose only gate is an
+            # Authorization header. `private` keeps it out of shared caches;
+            # `no-store` prevents a tenant's file being retained by the browser.
+            "Cache-Control": "private, no-store",
+        },
+        background=BackgroundTask(stream.close),
+    )
 
 
 @router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -15,14 +15,11 @@ import { useIsHydrated } from "@/hooks/use-is-hydrated";
 import {
   getCurrentUser,
   loginUser,
+  logoutUser,
   registerUser,
   type UserResponse,
 } from "@/lib/api/auth";
-import {
-  clearAccessToken,
-  getAccessToken,
-  subscribeToAccessToken,
-} from "@/lib/auth/token";
+import { getAccessToken, subscribeToAccessToken } from "@/lib/auth/token";
 import { queryKeys } from "@/lib/query-keys";
 
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
@@ -104,7 +101,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(() => {
-    clearAccessToken();
+    // Fire-and-forget: revoking the session server-side is the correct thing to
+    // do, but the user should not wait on a network round trip to be signed
+    // out, and `logoutUser` clears local storage either way.
+    void logoutUser();
     // Same reasoning as signIn: reset keeps observers attached, so signing back
     // in during the same page session still works.
     void queryClient.resetQueries();

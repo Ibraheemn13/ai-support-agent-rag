@@ -38,6 +38,10 @@ export const queryKeys = {
     organizationId: string | null | undefined,
     documentId: string,
   ) => ["documents", organizationId, documentId] as const,
+  documentFile: (
+    organizationId: string | null | undefined,
+    documentId: string,
+  ) => ["documents", organizationId, documentId, "file"] as const,
   conversations: (organizationId: string | null | undefined) =>
     ["conversations", organizationId] as const,
   conversation: (

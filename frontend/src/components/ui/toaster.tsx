@@ -1,12 +1,18 @@
 "use client";
 
+import { useTheme } from "next-themes";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 
 function Toaster(props: ToasterProps) {
+  const { resolvedTheme } = useTheme();
+
   return (
     <Sonner
       closeButton
       richColors
+      // Sonner paints its own surfaces, so it has to be told which theme it is
+      // in. Left on its default it renders light toasts over a dark app.
+      theme={resolvedTheme === "dark" ? "dark" : "light"}
       position="top-right"
       duration={4_000}
       // Sonner's own mobile rule sets width:100% while also applying left and

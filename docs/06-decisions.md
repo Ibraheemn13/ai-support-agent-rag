@@ -254,7 +254,7 @@ The scope is taken from the client-supplied path or header, which is safe becaus
 
 ## ADR-039: localStorage and a Sixty-Minute Session, Stated Rather Than Fixed
 
-Status: Accepted, with known cost
+Status: Accepted for `localStorage`; the session-length half is superseded by ADR-051
 
 The access token stays in `localStorage` (ADR-021) and still expires after sixty minutes with no refresh token. Both are shortcuts, and this records what they cost and why they were kept.
 
@@ -349,3 +349,123 @@ Each organization has a daily token budget, checked before chat and recorded aft
 Recording happens in a `finally`, so a question that retrieved nothing still pays for embedding itself, and a completion the provider billed for before failing is still counted — a meter that only counts happy paths under-reports exactly when things are going wrong. It never raises into the caller: the answer has already been delivered, and losing the meter must not undo it. The failure is logged loudly instead, because silently uncounted spend is how a cap stops working without anyone noticing.
 
 The check is against committed usage, so a request that starts just under the limit may finish over it. That is the same overshoot a fixed rate-limit window has and is accepted for the same reason: the alternative is reserving tokens before knowing how many the call will use, which means estimating. Zero means "no budget configured" rather than "no tokens allowed", because the opposite reading turns an unset value into a total outage. The `429` says the budget is daily and when it resets — "try again shortly" is wrong advice for a limit that clears at midnight — and usage is readable by any member, since a limit people cannot see arrives as an unexplained error.
+
+## ADR-046: One Accent, Chosen Against the Status Palette, With Dark Designed Beside It
+
+Status: Accepted
+
+The previous palette was deliberately neutral — a near-black primary, colour reserved for status. That was a defensible starting point and it produced an interface that read as competently assembled rather than designed. This replaces it with one committed accent, a display typeface for headings only, and a hero illustration that states the product before the headline is read.
+
+**Burnt terracotta, `#b4471f`.** Chosen partly for what it is not: the saturated indigo-to-violet band is the default costume of every AI product, and wearing it means being read as one of them before a word is read. Terracotta is warm without being playful, which matters because the product is now positioned for a freelancer as much as for a support team — a colder, more institutional accent would quietly answer "who is this for?" the wrong way. The neutrals were rewarmed to match: the page is paper `#fbf8f4` rather than grey, and every zinc became a stone. Half the impression comes from that, not from the accent.
+
+**The status ramps were moved to make room for it.** This is the real cost of the choice and the reason it needs recording. Terracotta sits between amber and red, so the stock warning and danger hues would have read as three shades of the brand colour rather than as three meanings. Success is olive rather than emerald, warning is gold rather than amber, and danger is crimson pushed toward red-violet, which is the one direction with hue distance to spare. The stronger rule is that the accent never renders as a status badge, so the two vocabularies never appear in the same row for comparison.
+
+**Fraunces, on headings only.** Applied to the hero, marketing section headings, and in-app page titles — nowhere else. Card titles, table headers, form labels, and body copy stay on the UI sans. A display face carries character at 40px and costs legibility at 14px, and a dashboard is mostly 14px. `SOFT` and `WONK` are requested explicitly in the font loader, because a variable font is subsetted to the axes asked for and the `font-variation-settings` would otherwise be silently inert.
+
+**The hero is a drawn diagram rather than a screenshot.** A tilted product shot was the alternative and was rejected on the brief's own test: a screenshot has to be read before it means anything. The diagram runs a single accent chain — marked document, line, node, highlighted sentence, source pill — so following the colour is following the claim. One real filename inside the pill is the only text; fully abstract, the drawing reads as generic dataflow. It is built from tokens, so dark mode repaints it instead of needing a second asset.
+
+**Light and dark were designed as a pair, not derived.** An inversion would have produced `#b4471f` on a dark ground, which is muddy and fails contrast, so dark uses `#e8734a` and flips the accent's foreground to near-black — a light accent no longer carries white text. Surfaces step *up* in lightness as they come forward rather than down. Two bugs found in this pass are the argument against auto-inversion: the modal scrim was a tint of the foreground, so it inverted into a *white* veil brightening the page it was meant to push back, and Sonner paints its own surfaces and renders light toasts over a dark app unless told the theme.
+
+**The ink bands are a token scope, not a set of overrides.** The closing call to action and the auth panel are dark in both themes, which is a hole in the model: a child reading `--primary` in light mode gets the dark terracotta and paints it onto near-black at 1.6:1. Rather than overriding classes at each call site, `.on-ink` re-declares the tokens its children read, so a `Button` inside it needs no special casing. They are ink rather than accent for a separate reason: a full-bleed terracotta band would be the largest area of colour on the page, which makes the accent scenery instead of a signal and leaves the primary button nothing to stand against.
+
+**Contrast is checked by a script, not by eye.** `npm run check:contrast` parses the tokens out of `globals.css` — rather than keeping a second copy that would drift — and asserts WCAG AA across both themes: 4.5:1 for text, 3:1 for control boundaries. It found that form-control borders sat at 1.6:1, because `--border-strong` was doing two unrelated jobs, decorative rule and interactive boundary. Splitting the control border onto `--input` fixed it without darkening the hero diagram's neutral lines.
+
+## ADR-047: Serving the Original Upload Back, and Refusing to Let Anything Cache It
+
+Status: Accepted
+
+Documents could be uploaded, prepared, searched, and cited, but never read. The only way to see any of a document's own text was to ask a question and recognise a passage in the answer. `GET /organizations/{id}/documents/{id}/file` streams the stored upload back so it can be opened in the browser.
+
+**The original file rather than the extracted passages.** The passages were the safer option and were rejected deliberately: they are what the assistant sees, not what the user uploaded, and someone checking "is my policy actually in here" wants their document, formatting and all. The cost is that this feature is built on the one piece of infrastructure known to be temporary — uploads live on the container filesystem, which limitation 2 records as ephemeral. Until that moves to object storage, a deployed instance loses every original on restart while its passages, which are in Postgres, survive. The endpoint is written to say so rather than to pretend otherwise.
+
+**`410 Gone`, not `404`.** A missing row and a missing file need different answers. The document is still listed, still searchable, still cited in past answers — telling the reader it does not exist would send them looking for the wrong problem. `410` plus a message that names the passages as still working is the honest report, and after object storage lands it is also the signal that a restore is what is needed.
+
+**Fetched through the API client, not linked to.** The session is a bearer token in `localStorage` (ADR-021), and neither `<a href>` nor `<iframe src>` can carry a header. The client requests a blob and the component turns it into an object URL, which also means the URL is revocable and never leaves the tab. A signed-URL scheme would avoid the round trip and is the right answer once files are in object storage; it is not worth building against a local directory.
+
+**Served `inline`, with `nosniff`.** Inline is the point — the file should render, not download. But that means returning bytes a user supplied, from our own origin, under a media type recorded at upload from the client's own claim. Without `X-Content-Type-Options: nosniff` a `.txt` full of markup can be sniffed as HTML and executed as this origin. The path is also checked to be inside the upload root before it is opened: today the column is only ever written by `upload` from generated UUIDs, but a filesystem read assembled from a database string is the exact shape of a traversal, and the check costs one comparison.
+
+**Nothing may cache it, and this was found by watching it happen.** `FileResponse` sends an ETag and a last-modified date and no cache directive, which leaves a browser free to store the bytes and reuse them heuristically — observed still serving a document whose file had been deleted. `private` keeps one tenant's document out of any shared cache and `no-store` keeps it off disk. The errors carry `no-store` too, which is the less obvious half: `404` and `410` are both cacheable by default under RFC 9110, and a pinned `410` would go on reporting a file as gone after a re-upload had brought it back under the same document id. That is not a corner case here; it is the normal recovery path.
+
+Deployment amendment: ADR-048 replaces local-only storage with a provider
+boundary. The API still proxies original files and preserves these membership,
+content-sniffing, and cache rules for both local and object storage.
+
+## ADR-048: Private Object Storage Behind a Provider Boundary
+
+Status: Accepted
+
+Uploads use a small storage protocol with local and S3-compatible adapters.
+Local disk remains the zero-friction development default. Deployed files live
+in a private Supabase Storage bucket because Render free web-service filesystems
+are ephemeral and the API and RQ worker must see the same bytes after a restart.
+
+The existing `documents.file_path` column stores a provider locator: a local
+path or an S3 object key. Renaming the column would add a migration without
+changing behavior, so the compatibility cost is accepted and documented. Keys
+retain organization and knowledge-base prefixes, which makes cleanup and
+incident inspection tenant-readable without treating key layout as an
+authorization boundary.
+
+Extractors receive a temporary local materialization from the provider rather
+than an S3 client. PDF and DOCX libraries stay storage-agnostic, and temporary
+files are deleted when extraction ends. Original-file responses continue to
+pass through FastAPI instead of returning permanent public URLs, preserving the
+existing JWT and membership checks. Short-lived signed URLs are a later scale
+optimization, not the privacy model.
+
+## ADR-049: Supabase as Managed Postgres, Not as a Second Backend
+
+Status: Accepted
+
+Supabase hosts the existing PostgreSQL schema and pgvector extension. FastAPI,
+SQLAlchemy, Alembic, JWT authentication, authorization, and RLS session scope
+remain authoritative; Supabase Auth and the generated Data API are not added as
+parallel application paths. This avoids two identity systems and two places
+where tenant rules could diverge.
+
+Render connects through Supavisor session pooling on port `5432`, which is
+reachable over IPv4 and preserves normal session semantics. Migrations use the
+`postgres` owner connection while application traffic uses the non-owning
+`supportmind_app` role from ADR-038. The public schema is otherwise visible to
+Supabase's Data API, so Alembic explicitly revokes application-table privileges
+from `anon`, `authenticated`, and `service_role`. S3 access keys are separate
+server-side credentials and are never exposed to the browser.
+
+## ADR-050: A Combined API and Worker Process Only for Render Free
+
+Status: Accepted for the public demo; rejected as the production topology
+
+Render does not offer free background-worker instances. To keep the public
+portfolio demo deployable at zero hosting cost, one free Python web service
+starts Uvicorn and one RQ worker as sibling processes. If either exits, the
+wrapper stops the other so Render restarts a coherent pair. Alembic runs before
+both because free services have no shell access and a fresh Supabase database
+must be bootstrapped automatically.
+
+This gives the service one shared CPU and memory budget, one scaling unit, and
+no independent worker health control. Free Render Key Value is memory-only, so
+a restart can discard queued jobs even though document rows and uploaded bytes
+remain durable. Those are acceptable demo constraints and named in the deploy
+guide. A paid deployment splits API and worker services, enables persistent
+queue storage, runs migrations as a release step, and schedules the stale-work
+sweep independently.
+
+## ADR-051: Rotating Refresh Tokens, Because the Session Was Failing People Mid-Task
+
+Status: Accepted
+
+ADR-039 recorded a sixty-minute session with no refresh as a known cost and named the work that would fix it: "rotation, reuse detection, and a revocation store". This is that work. The trigger was not theory — the expiry was interrupting ordinary use often enough to be the most-felt defect in the product, and shipping it to a deployment where sessions matter would have made it worse.
+
+**The refresh token is opaque and random, not a JWT.** The entire point of this table is that a session can be ended. A self-describing token is valid until its own `exp` no matter what the server has since decided, which is precisely the property a sign-out must not have. Thirty-two bytes of `urandom` carries no claims and means nothing without the row it points at, so revocation is a single `UPDATE`.
+
+**Only a hash is stored.** Same reasoning as passwords: a leaked database should not hand over live sessions. It is SHA-256 rather than a password hash, and that is deliberate in both directions — a slow hash exists to make guessing a low-entropy human secret expensive, which buys nothing against 256 bits of `urandom`, and more practically a salted hash cannot be looked up, while every refresh has to find its row by the token presented.
+
+**Rotation is what makes a long-lived credential in `localStorage` defensible.** Each refresh spends the old token and issues a new one, so a stolen copy stops working the moment the real client refreshes. That narrows the window from "thirty days" to "until the user's next request", which is usually seconds.
+
+**Reuse is treated as theft.** Presenting an already-rotated token means two holders share one lineage, and there is no way to tell which is the legitimate one — so the whole family is revoked rather than guessing. The real user signs in again; the attacker's copy dies with it. Failing safe here costs one login and is the only option that does not silently favour the thief.
+
+**One error for unknown, expired, and revoked.** Distinguishing them would tell someone holding a stolen token whether it was ever real, and all three have the same remedy. `logout` likewise returns `204` for tokens that never existed, so sign-out is not an oracle either.
+
+**The client refreshes single-flight.** This is the non-obvious part, and skipping it would have made the feature actively harmful: a dashboard issues several requests at once, so an expired access token produces several simultaneous `401`s. Refreshing per-request means the first succeeds and the rest replay a token that was just spent — which this design correctly reads as theft and answers by revoking the session. Without a shared in-flight promise, adding refresh tokens would log people out *more* reliably than having none. The retry is also capped at one attempt and never applies to `/auth/refresh` itself, so a genuinely dead session ends instead of looping.
+
+**What this does not fix.** Both tokens still live in `localStorage`, so ADR-039's first half stands unchanged and limitation 4 stays open — an XSS still yields a session, and now the more valuable half of one. Rotation bounds the damage rather than removing it. `HttpOnly` cookies remain the right end state, and remain a larger change than this one: a cookie-setting login endpoint, CSRF protection, and credentialed CORS across two origins.

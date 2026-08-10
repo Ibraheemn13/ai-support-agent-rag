@@ -2,6 +2,7 @@
 
 import { LogOut, Menu, UserRound } from "lucide-react";
 
+import { ThemeToggle } from "@/components/common/theme-toggle";
 import { WorkspaceSwitcher } from "@/components/layout/workspace-switcher";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,6 +67,8 @@ export function TopBar({
       />
 
       <div className="flex-1" />
+
+      <ThemeToggle />
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

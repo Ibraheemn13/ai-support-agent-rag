@@ -36,17 +36,23 @@ from app.db.tenancy import (
     warn_if_row_level_security_is_bypassed,
 )
 from app.models.base import Base
-from app.models.conversation import Conversation, Message, MessageCitation
+from app.models.conversation import (
+    Conversation,
+    Message,
+    MessageCitation,
+    MessageFeedback,
+)
 from app.models.document import Document, DocumentChunk
 from app.models.knowledge_base import KnowledgeBase
 from app.models.organization import Organization, OrganizationMember
 from app.models.user import User
+from app.models.usage import OrganizationUsageDay
 
 
 DATABASE_URL = os.environ.get("RLS_TEST_DATABASE_URL")
 
 
-def _migration():
+def _migration(filename: str, module_name: str):
     """The RLS migration, loaded by path.
 
     Alembic revisions are not importable as modules — the directory is not a
@@ -58,16 +64,31 @@ def _migration():
         Path(__file__).resolve().parents[1]
         / "alembic"
         / "versions"
-        / "20260806_0005_enable_row_level_security.py"
+        / filename
     )
-    spec = importlib.util.spec_from_file_location("rls_migration", path)
+    spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-_RLS_MIGRATION = _migration()
-TENANT_TABLES = _RLS_MIGRATION.TENANT_TABLES
+_RLS_MIGRATION = _migration(
+    "20260806_0005_enable_row_level_security.py",
+    "rls_migration",
+)
+_USAGE_MIGRATION = _migration(
+    "20260808_0007_add_organization_usage_days.py",
+    "usage_migration",
+)
+_HARDENING_MIGRATION = _migration(
+    "20260809_0008_harden_supabase_access.py",
+    "hardening_migration",
+)
+TENANT_TABLES = (
+    *_RLS_MIGRATION.TENANT_TABLES,
+    *_USAGE_MIGRATION.TENANT_TABLES,
+    *_HARDENING_MIGRATION.ADDITIONAL_TENANT_TABLES,
+)
 POLICY_NAME = _RLS_MIGRATION.POLICY_NAME
 PREDICATE = _RLS_MIGRATION.PREDICATE
 
@@ -95,6 +116,8 @@ TABLES = [
     Conversation.__table__,
     Message.__table__,
     MessageCitation.__table__,
+    MessageFeedback.__table__,
+    OrganizationUsageDay.__table__,
 ]
 
 
@@ -364,7 +387,6 @@ def test_every_tenant_table_has_the_policy_forced(engine):
         ).scalars()
         forced = set(rows)
 
-    # FORCE matters specifically because the application connects as the owner
-    # of these tables, and Postgres exempts an owner from its own policies
-    # unless forced.
+    # FORCE keeps the protection meaningful even if ownership changes during
+    # maintenance; the normal application role is deliberately non-owning.
     assert forced == set(TENANT_TABLES)

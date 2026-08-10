@@ -1,6 +1,15 @@
-import axios, { isAxiosError, type AxiosError } from "axios";
+import axios, {
+  isAxiosError,
+  type AxiosError,
+  type InternalAxiosRequestConfig,
+} from "axios";
 
-import { clearAccessToken, getAccessToken } from "@/lib/auth/token";
+import {
+  clearSession,
+  getAccessToken,
+  getRefreshToken,
+  setSession,
+} from "@/lib/auth/token";
 import type { FastAPIErrorBody, FastAPIValidationIssue } from "@/types/api";
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
@@ -156,15 +165,71 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+/**
+ * The in-flight refresh, if one is running.
+ *
+ * A dashboard fires several queries at once, so an expired access token
+ * produces several simultaneous 401s. Without this, each would refresh
+ * independently — and since refresh tokens rotate and are single-use, the
+ * first would succeed and the rest would replay a spent token, which the
+ * backend treats as theft and answers by revoking the whole session. The
+ * feature would log you out precisely when it was supposed to keep you in.
+ *
+ * So the first 401 starts the refresh and the others await the same promise.
+ */
+let refreshInFlight: Promise<string> | null = null;
+
+async function refreshSession(): Promise<string> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    throw new APIError("No refresh token available.", 401);
+  }
+
+  // A bare axios call, not `apiClient`: going through the instance would run
+  // this same interceptor on failure and recurse.
+  const response = await axios.post<{
+    access_token: string;
+    refresh_token: string;
+  }>(`${API_BASE_URL}/api/v1/auth/refresh`, { refresh_token: refreshToken });
+
+  setSession(response.data.access_token, response.data.refresh_token);
+  return response.data.access_token;
+}
+
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: unknown) => {
-    if (isAxiosError(error) && error.response?.status === 401) {
-      clearAccessToken();
-      redirectToLogin();
+  async (error: unknown) => {
+    if (!isAxiosError(error) || error.response?.status !== 401) {
+      return Promise.reject(normalizeAPIError(error));
     }
 
-    return Promise.reject(normalizeAPIError(error));
+    const request = error.config as
+      | (InternalAxiosRequestConfig & { _retriedAfterRefresh?: boolean })
+      | undefined;
+
+    // Only retry once, and never retry the refresh call itself — a 401 from
+    // it means the session is genuinely over.
+    const isRefreshCall = request?.url?.includes("/auth/refresh");
+    if (!request || request._retriedAfterRefresh || isRefreshCall) {
+      clearSession();
+      redirectToLogin();
+      return Promise.reject(normalizeAPIError(error));
+    }
+
+    try {
+      refreshInFlight = refreshInFlight ?? refreshSession();
+      const accessToken = await refreshInFlight;
+
+      request._retriedAfterRefresh = true;
+      request.headers.Authorization = `Bearer ${accessToken}`;
+      return await apiClient(request);
+    } catch {
+      clearSession();
+      redirectToLogin();
+      return Promise.reject(normalizeAPIError(error));
+    } finally {
+      refreshInFlight = null;
+    }
   },
 );
 

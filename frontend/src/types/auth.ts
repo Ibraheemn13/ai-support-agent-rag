@@ -18,7 +18,9 @@ export interface RegistrationDetails extends Credentials {
   full_name?: string | null;
 }
 
-export interface AccessToken {
+/** A session: the short-lived bearer token and the token that renews it. */
+export interface SessionTokens {
   access_token: string;
+  refresh_token: string;
   token_type: string;
 }

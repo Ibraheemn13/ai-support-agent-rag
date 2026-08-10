@@ -385,3 +385,67 @@ Documents could be uploaded, prepared, searched, and cited, but never read. The 
 **Served `inline`, with `nosniff`.** Inline is the point — the file should render, not download. But that means returning bytes a user supplied, from our own origin, under a media type recorded at upload from the client's own claim. Without `X-Content-Type-Options: nosniff` a `.txt` full of markup can be sniffed as HTML and executed as this origin. The path is also checked to be inside the upload root before it is opened: today the column is only ever written by `upload` from generated UUIDs, but a filesystem read assembled from a database string is the exact shape of a traversal, and the check costs one comparison.
 
 **Nothing may cache it, and this was found by watching it happen.** `FileResponse` sends an ETag and a last-modified date and no cache directive, which leaves a browser free to store the bytes and reuse them heuristically — observed still serving a document whose file had been deleted. `private` keeps one tenant's document out of any shared cache and `no-store` keeps it off disk. The errors carry `no-store` too, which is the less obvious half: `404` and `410` are both cacheable by default under RFC 9110, and a pinned `410` would go on reporting a file as gone after a re-upload had brought it back under the same document id. That is not a corner case here; it is the normal recovery path.
+
+Deployment amendment: ADR-048 replaces local-only storage with a provider
+boundary. The API still proxies original files and preserves these membership,
+content-sniffing, and cache rules for both local and object storage.
+
+## ADR-048: Private Object Storage Behind a Provider Boundary
+
+Status: Accepted
+
+Uploads use a small storage protocol with local and S3-compatible adapters.
+Local disk remains the zero-friction development default. Deployed files live
+in a private Supabase Storage bucket because Render free web-service filesystems
+are ephemeral and the API and RQ worker must see the same bytes after a restart.
+
+The existing `documents.file_path` column stores a provider locator: a local
+path or an S3 object key. Renaming the column would add a migration without
+changing behavior, so the compatibility cost is accepted and documented. Keys
+retain organization and knowledge-base prefixes, which makes cleanup and
+incident inspection tenant-readable without treating key layout as an
+authorization boundary.
+
+Extractors receive a temporary local materialization from the provider rather
+than an S3 client. PDF and DOCX libraries stay storage-agnostic, and temporary
+files are deleted when extraction ends. Original-file responses continue to
+pass through FastAPI instead of returning permanent public URLs, preserving the
+existing JWT and membership checks. Short-lived signed URLs are a later scale
+optimization, not the privacy model.
+
+## ADR-049: Supabase as Managed Postgres, Not as a Second Backend
+
+Status: Accepted
+
+Supabase hosts the existing PostgreSQL schema and pgvector extension. FastAPI,
+SQLAlchemy, Alembic, JWT authentication, authorization, and RLS session scope
+remain authoritative; Supabase Auth and the generated Data API are not added as
+parallel application paths. This avoids two identity systems and two places
+where tenant rules could diverge.
+
+Render connects through Supavisor session pooling on port `5432`, which is
+reachable over IPv4 and preserves normal session semantics. Migrations use the
+`postgres` owner connection while application traffic uses the non-owning
+`supportmind_app` role from ADR-038. The public schema is otherwise visible to
+Supabase's Data API, so Alembic explicitly revokes application-table privileges
+from `anon`, `authenticated`, and `service_role`. S3 access keys are separate
+server-side credentials and are never exposed to the browser.
+
+## ADR-050: A Combined API and Worker Process Only for Render Free
+
+Status: Accepted for the public demo; rejected as the production topology
+
+Render does not offer free background-worker instances. To keep the public
+portfolio demo deployable at zero hosting cost, one free Python web service
+starts Uvicorn and one RQ worker as sibling processes. If either exits, the
+wrapper stops the other so Render restarts a coherent pair. Alembic runs before
+both because free services have no shell access and a fresh Supabase database
+must be bootstrapped automatically.
+
+This gives the service one shared CPU and memory budget, one scaling unit, and
+no independent worker health control. Free Render Key Value is memory-only, so
+a restart can discard queued jobs even though document rows and uploaded bytes
+remain durable. Those are acceptable demo constraints and named in the deploy
+guide. A paid deployment splits API and worker services, enables persistent
+queue storage, runs migrations as a release step, and schedules the stale-work
+sweep independently.

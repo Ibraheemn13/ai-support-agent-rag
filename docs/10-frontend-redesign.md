@@ -190,34 +190,34 @@ Severity: **B** blocks deployment · **S** security · **R** reliability ·
 
 | # | Sev | Limitation | Closed by | Status |
 | --- | --- | --- | --- | --- |
-| 1 | B | CORS middleware only registers when `APP_ENV` is a local value, so a deployed frontend is blocked by the browser | 18 | Open |
-| 2 | B | Uploads written to the container filesystem, which is ephemeral on most hosts. Now also user-visible: viewing a document's original file depends on it (ADR-047) | 18 | Open |
-| 3 | B | JWT secret falls back to a known default instead of failing loudly | 18 | Open |
+| 1 | B | CORS middleware only registers when `APP_ENV` is a local value, so a deployed frontend is blocked by the browser | 18 | Closed |
+| 2 | B | Uploads written to the container filesystem, which is ephemeral on most hosts. Now also user-visible: viewing a document's original file depends on it (ADR-047) | 18 | Closed |
+| 3 | B | JWT secret falls back to a known default instead of failing loudly | 18 | Closed |
 | 4 | S | Tokens in `localStorage`; an XSS bug becomes a session compromise (ADR-021) | 13 | Open |
 | 5 | S | Sessions expire hard at 60 minutes with no refresh | 13 | Accepted tradeoff |
-| 6 | S | No rate limiting: login is brute-forceable and chat spend is uncapped | 13 | Open |
+| 6 | S | No rate limiting: login is brute-forceable and chat spend is uncapped | 13 | Closed |
 | 7 | S | No email verification or password reset | — | Won't do for now |
-| 8 | S | Tenant isolation enforced in application queries, not Postgres RLS (ADR-001) | 13 | Open |
+| 8 | S | Tenant isolation enforced in application queries, not Postgres RLS (ADR-001) | 13 | Closed |
 | 9 | R | `BackgroundTasks` are not durable; a restart strands a document in `processing` | 12 | Closed |
 | 10 | R | No retry or backoff when the embedding provider fails | 12 | Closed |
 | 11 | R | Status is polled every 1.5s and gives up after 2 minutes, rather than pushed | — | Deferred |
-| 12 | C | No pagination on documents, knowledge spaces, threads, or messages | 14 | Open |
-| 13 | C | Document search and filtering happen client-side | 14 | Open |
-| 14 | C | Nothing can be deleted: documents, knowledge spaces, or workspaces | 14 | Open |
-| 15 | Q | Vector-only retrieval; no keyword or BM25 hybrid | 15 | Open |
+| 12 | C | No pagination on documents, knowledge spaces, threads, or messages | 14 | Closed |
+| 13 | C | Document search and filtering happen client-side | 14 | Closed |
+| 14 | C | Nothing can be deleted: documents, knowledge spaces, or workspaces | 14 | Closed |
+| 15 | Q | Vector-only retrieval; no keyword or BM25 hybrid | 15 | Closed |
 | 16 | Q | No re-ranking of retrieved chunks | 15 | Open |
-| 17 | Q | Naive character-window chunking splits mid-table and mid-list | 15 | Open |
-| 18 | Q | No evaluation harness, so retrieval changes cannot be measured | 15 | Open |
+| 17 | Q | Naive character-window chunking splits mid-table and mid-list | 15 | Closed |
+| 18 | Q | No evaluation harness, so retrieval changes cannot be measured | 15 | Closed |
 | 19 | Q | Answers are not streamed; a slow model reads as a hang | — | Deferred |
-| 20 | Q | Sources are not deduplicated across chunks of the same document | 15 | Open |
+| 20 | Q | Sources are not deduplicated across chunks of the same document | 15 | Closed |
 | 21 | P | No team management UI, although roles exist in the schema and API | — | Won't do for now |
 | 22 | P | Account details are read-only; no name, email, or password changes | — | Won't do for now |
 | 23 | P | No light/dark theme switching, although the tokens support it | Visual identity | Closed |
 | 24 | P | No copy, regenerate, edit, or delete on chat messages | — | Won't do for now |
 | 25 | E | Frontend had no automated tests | 11 | Closed |
 | 26 | E | No CI, so tests run only when invoked locally | 11b | Closed |
-| 27 | E | No structured logging, metrics, tracing, or error reporting | 17 | Open |
-| 28 | E | No cost controls on OpenAI usage | 17 | Open |
+| 27 | E | No structured logging, metrics, tracing, or error reporting | 17 | Partially closed: logs and error reporting only |
+| 28 | E | No cost controls on OpenAI usage | 17 | Closed |
 | 29 | E | Accessibility not formally audited; ARIA, skip links, and focus states are in place but unverified by a screen reader or axe | — | Deferred |
 
 Three entries are worth expanding, because the reasoning matters more than the

@@ -2,87 +2,130 @@
 
 ## Overview
 
-AI Support Agent RAG is planned as a production-style support automation system with separate API, frontend, worker, database, cache, and agent orchestration layers.
+SupportMind is a multi-tenant retrieval-augmented support application. A
+Next.js frontend calls a FastAPI API; PostgreSQL stores relational data,
+full-text indexes, pgvector embeddings, and usage records; an RQ worker prepares
+documents; private object storage holds originals.
+
+The browser never talks directly to the database or object store. FastAPI is
+the public data boundary for authentication, authorization, tenant scoping,
+uploads, retrieval, and chat.
 
 ## High-Level Components
 
 | Component | Technology | Responsibility |
 | --- | --- | --- |
-| Frontend | Next.js | Customer chat UI, admin dashboard, document management, conversation review |
-| Backend API | FastAPI | Auth, REST API, request validation, conversation endpoints, admin operations |
-| Agent Orchestration | LangGraph | RAG workflow, tool routing, answer generation, escalation decisions |
-| Database | PostgreSQL | Durable relational data for users, organizations, documents, conversations, messages |
-| Vector Search | pgvector | Embedding storage and similarity search for document chunks |
-| Cache and Broker | Redis | Caching, Celery broker, rate limiting support, transient state |
-| Background Workers | Celery | Document ingestion, chunking, embedding generation, re-indexing, async tasks |
+| Frontend | Next.js App Router | Onboarding, workspaces, knowledge, documents, conversations, cited answers |
+| Backend API | FastAPI | JWT auth, HTTP contracts, membership and role checks, orchestration |
+| Data access | SQLAlchemy 2.0 + Alembic | Repository queries, tenant transactions, reviewable migrations |
+| Database | PostgreSQL + pgvector | Durable records, full-text search, vectors, RLS, usage metering |
+| File storage | Local adapter or private S3-compatible storage | Original uploaded documents |
+| Queue | Redis-compatible Render Key Value + RQ | Durable preparation jobs, retries, rate-limit counters |
+| Worker | RQ worker | Extraction, chunking, embeddings, status transitions |
+| AI providers | OpenAI behind provider protocols | Query/document embeddings and grounded answer generation |
+| Observability | Structured logs and optional error reporting | Request/job correlation, redaction, failures, timing |
 
-## Request Flow
+LangGraph and Celery are deliberately absent. The current workflow has one
+linear preparation job and one grounded-answer path; RQ plus explicit Python
+services exposes the behavior without adding orchestration machinery the
+product does not yet need.
 
-### Chat Answer Flow
+## Tenant Isolation
 
-1. User sends a support question from the Next.js frontend.
-2. FastAPI authenticates the request and stores the user message.
-3. The backend invokes the LangGraph support workflow.
-4. The retrieval step searches pgvector for relevant chunks.
-5. The generation step produces an answer grounded in retrieved context.
-6. The backend stores the assistant response and citations.
-7. The frontend renders the answer, citations, and escalation options.
+Every tenant-owned table carries `organization_id` directly. FastAPI resolves
+the current user, checks organization membership and role, and scopes every
+repository call. PostgreSQL RLS provides a second line of defense by reading
+`app.current_organization_id`, which SQLAlchemy sets at the start of every
+transaction.
 
-### Document Ingestion Flow
+Runtime traffic uses a non-owning, non-superuser database role so RLS actually
+applies. Migrations use the owner role. On Supabase, Data API table privileges
+are revoked because this application does not use PostgREST as a parallel data
+path.
 
-1. Admin uploads a document.
-2. FastAPI stores document metadata and creates an ingestion job.
-3. Celery worker extracts text from the document.
-4. Worker chunks the text into retrieval-friendly sections.
-5. Worker generates embeddings for each chunk.
-6. Chunks and embeddings are stored in PostgreSQL with pgvector.
-7. Document status is updated for admin visibility.
+## Document Preparation Flow
+
+1. An owner or admin uploads a supported document.
+2. FastAPI validates its tenant, MIME type, extension, and size.
+3. The configured storage provider saves the private original and a `pending`
+   document row records its locator.
+4. **Prepare for chat** changes the row to `processing` and enqueues one RQ job.
+5. The worker claims the document conditionally so concurrent workers cannot
+   both prepare it.
+6. Storage materializes the object locally for PDF, DOCX, or text extraction.
+7. The worker writes tenant-scoped chunks and marks the document `processed`.
+8. It embeds chunks without vectors, writes them in batches, and marks the
+   document `indexed`.
+9. Retryable provider failures use bounded backoff. Permanent input errors mark
+   the document `failed` with a concise reason.
+
+Extraction replaces prior chunks and indexing skips vectors already present,
+so at-least-once delivery converges without duplicating chunks or paying twice
+for completed embeddings.
+
+## Chat Answer Flow
+
+1. A member sends a question inside one organization and knowledge space.
+2. The API stores the user message and checks the daily token budget.
+3. The embedding provider embeds the question.
+4. PostgreSQL performs tenant-scoped vector and full-text retrieval.
+5. Reciprocal rank fusion combines those rankings.
+6. The chat provider receives only the selected context and an instruction to
+   answer from it.
+7. The API stores the assistant message, separate citation rows, and provider
+   token usage.
+8. The frontend renders the answer and its inspectable original sources.
 
 ## Logical Boundaries
 
 ### API Layer
 
-- Owns HTTP contracts.
-- Validates input and output schemas.
-- Enforces authentication, authorization, and organization boundaries.
-- Delegates long-running work to Celery.
-- Delegates RAG workflow execution to the agent layer.
+- Owns request and response contracts.
+- Resolves authenticated users and organization context.
+- Enforces role checks before calling services.
+- Maps domain failures to stable HTTP responses.
 
-### Agent Layer
+### Service and Repository Layers
 
-- Owns support reasoning workflow.
-- Performs retrieval, answer generation, citation selection, and escalation classification.
-- Should remain framework-isolated enough to test independently from HTTP.
+- Services own business rules and transaction boundaries.
+- Repositories own SQLAlchemy queries and explicit tenant filters.
+- Provider protocols isolate storage, embeddings, and chat SDKs.
 
 ### Worker Layer
 
-- Owns slow or retryable background work.
-- Handles ingestion, embedding, re-indexing, cleanup, and scheduled maintenance.
-- Must be idempotent where possible.
+- Owns slow, retryable preparation work.
+- Opens its own database sessions and organization scope.
+- Uses conditional claims, timeouts, retries, and stale-work recovery.
 
 ### Data Layer
 
-- PostgreSQL is the source of truth.
-- pgvector is used inside PostgreSQL for vector similarity search.
-- Redis is not the source of truth.
+- PostgreSQL is the durable source of truth.
+- pgvector and full-text search stay transactionally aligned with chunks.
+- Object storage owns original bytes, never authorization.
+- Redis is transient coordination, not durable product state.
 
 ## Deployment Shape
 
-Initial deployment is expected to use Docker Compose for local development and a container-based production target.
+Local development uses Docker Compose for PostgreSQL/pgvector and Redis, local
+file storage, a FastAPI process, an RQ worker, and the Next.js development
+server.
 
-Planned services:
+The free public demo uses Supabase for PostgreSQL and private S3-compatible
+Storage, Render Key Value for Redis/RQ, one Render web service containing the
+API and worker, and a second Render web service for Next.js. The combined
+backend process exists only because free Render background workers are not
+available.
 
-- `web`: FastAPI backend
-- `frontend`: Next.js app
-- `worker`: Celery worker
-- `scheduler`: Celery beat or equivalent scheduler, if needed
-- `postgres`: PostgreSQL with pgvector
-- `redis`: Redis broker/cache
+A production deployment should split API and worker services, use a persistent
+queue, run Alembic as a release step, schedule stale-work recovery, enable
+backups and monitoring, and use separate staging and production projects.
 
-## Open Questions
+## Deliberately Deferred
 
-- Which authentication provider will be used?
-- Which embedding model and chat model will be used?
-- Should uploaded files be stored locally, in object storage, or both?
-- Should streaming responses be supported in the first implementation?
-- What tenant isolation guarantees are required for production?
+- Secure cookie sessions, refresh-token rotation, email verification, and
+  password reset
+- Streaming answers
+- OCR for scanned PDFs
+- Queue priorities and per-tenant worker fairness
+- Re-ranking and answer-quality evaluation
+- Agent tool use or LangGraph, when a product workflow genuinely requires it

@@ -5,7 +5,7 @@
 A multi-tenant RAG application: FastAPI and Postgres/pgvector behind a Next.js product surface that never asks the user to understand retrieval, embeddings, or indexing.
 
 [![CI](https://github.com/ZakwanZahid/ai-support-agent-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/ZakwanZahid/ai-support-agent-rag/actions/workflows/ci.yml)
-![Backend tests](https://img.shields.io/badge/backend-187%20tests-brightgreen)
+![Backend tests](https://img.shields.io/badge/backend-220%20tests-brightgreen)
 ![Frontend tests](https://img.shields.io/badge/frontend-52%20tests-brightgreen)
 ![E2E](https://img.shields.io/badge/e2e-1%20flow%20(manual)-blue)
 
@@ -57,7 +57,7 @@ flowchart TB
 
     subgraph data["Storage"]
         PG[("PostgreSQL<br/>+ pgvector")]
-        Disk[["Uploaded files<br/>(local disk)"]]
+        Objects[["Uploaded files<br/>(local disk / private S3)"]]
     end
 
     subgraph external["OpenAI"]
@@ -68,7 +68,7 @@ flowchart TB
     UI -->|"JSON + Bearer token"| Routes
     Routes --> Deps --> Services
     Services --> PG
-    Services --> Disk
+    Services --> Objects
     Services -.->|"enqueue"| RQ
     RQ --> Job
     Job -->|"claim, then write chunks"| PG
@@ -133,17 +133,18 @@ Answers are assembled the same way every time: embed the question, retrieve the 
 | Data fetching | TanStack Query · Axios · React Hook Form · Zod |
 | API | FastAPI, SQLAlchemy 2.0, Pydantic v2, Alembic |
 | Database | PostgreSQL + pgvector |
+| File storage | Local adapter in development, private S3-compatible storage in deployment |
 | Models | OpenAI `text-embedding-3-small`, `gpt-4o-mini`, behind provider interfaces |
 | Queue | Redis + RQ for durable document preparation |
 | Retrieval | pgvector + Postgres full-text, fused by reciprocal rank |
 | Observability | JSON logs with request correlation, per-organization token metering |
-| Tests | pytest (187) · Vitest (52) · Playwright (1 end-to-end flow) |
+| Tests | pytest (220) · Vitest (52) · Playwright (1 end-to-end flow) |
 
 ## Key engineering decisions
 
 **One module owns the product vocabulary.** [`terminology.ts`](frontend/src/lib/terminology.ts) holds a single descriptor table; components derive labels, badge tones, timeline position, and *whether to keep polling* from it. `StatusBadge` doesn't know what `indexed` means — it asks. Enforced by tests that assert no forbidden API term ever appears in user-facing copy, so the rule fails loudly rather than eroding.
 
-**Two operations, one endpoint.** [`POST /documents/{id}/prepare`](backend/app/api/v1/preparation.py) chains extraction and indexing in one background task, with `409` guards for already-running and already-ready. See ADR-025.
+**Two operations, one endpoint.** [`POST /documents/{id}/prepare`](backend/app/api/v1/preparation.py) chains extraction and indexing in one RQ job, with `409` guards for already-running and already-ready. See ADR-025.
 
 **Aggregate counts, not N+1.** Knowledge bases return `document_count`/`ready_document_count`; conversations return `message_count`/`last_message_preview`. Grouped and correlated subqueries, so a list is one round trip regardless of length — instead of the client fetching every child row to count it. See ADR-031.
 
@@ -157,22 +158,20 @@ Answers are assembled the same way every time: embed the question, retrieve the 
 
 **And tenant isolation doesn't depend on that alone.** Postgres row-level security scopes every tenant table to the requesting organization, so a query that forgets its filter returns nothing rather than someone else's rows. The application connects as a role that owns nothing — a superuser or table owner bypasses policies outright, which makes the feature silently decorative (ADR-038).
 
-**Provider interfaces over SDK calls.** Embedding and chat both sit behind small protocols resolved by a factory, so swapping providers is one adapter rather than a search-and-replace.
+**Provider interfaces over SDK calls.** Embedding, chat, and file storage sit behind small protocols resolved by factories, so swapping a provider is an adapter rather than a search-and-replace.
 
 ## Known limitations
 
 Stated rather than hidden. The full list with severities is in [docs/10-frontend-redesign.md](docs/10-frontend-redesign.md).
 
-**Blocks production deployment**
-- CORS middleware only registers when `APP_ENV` is a local value, so a deployed frontend would be blocked by the browser
-- Uploads are written to the container filesystem, which is ephemeral on most hosts
-- The JWT secret falls back to a known default instead of failing loudly
+**Free demo deployment**
+- Render free web services sleep when idle, so the first request can take roughly a minute
+- The API and one worker share a single free web service; they cannot scale independently
+- Free Render Key Value is memory-only, so a restart can lose queued jobs and rate-limit counters
 
 **Security**
 - Tokens in `localStorage` — an XSS bug becomes a session compromise. Kept knowingly; the reasoning and what mitigates it are in ADR-039
 - Sessions expire hard at 60 minutes with no refresh, which bounds a stolen token's life at the cost of being logged out mid-task (ADR-039)
-- Rate limiting keys unauthenticated callers on the connecting address, so a deployment behind a load balancer needs proxy header trust configured before the auth limit means anything (ADR-037)
-- Per-organization chat limits cap the burst, not the day; a daily token budget is phase 17's cost cap
 
 **Reliability**
 - One queue with no priorities, so a bulk upload delays everyone else
@@ -202,14 +201,14 @@ The strategy is deliberate rather than uniform: unit-test the modules whose corr
 
 | Suite | Count | What it covers |
 | --- | --- | --- |
-| pytest | 187 | Auth, tenancy, upload, ingestion, indexing, search, RAG chat, preparation, aggregates, workspace settings, queue claims and sweep, rate limiting, row-level security, deletion, pagination, chunking, rank fusion, eval scoring, logging redaction, usage metering, cost caps |
+| pytest | 220 | Auth, tenancy, local/S3 storage, upload, ingestion, indexing, search, RAG chat, preparation, aggregates, workspace settings, queue claims and sweep, rate limiting, row-level security, deletion, pagination, chunking, rank fusion, eval scoring, logging redaction, usage metering, cost caps |
 | Vitest | 52 | `terminology.ts` (100%), `api/client.ts` (91%), `StatusBadge` (100%), `ConfirmDeleteDialog` |
 | Playwright | 1 flow | Signup → onboarding → upload → prepare → ask → sourced answer |
 
 Overall unit coverage is ~7% because components and hooks are not unit-tested. Inflating that number by testing presentational markup would cost real time and prove little; the flow those components participate in is covered by the end-to-end spec instead. The end-to-end test also asserts the negative case that matters most — that no API vocabulary or UUID ever reaches the screen.
 
 ```bash
-cd backend && pytest              # 178 tests; 9 more with Postgres, below
+cd backend && pytest              # 211 tests; 9 more with Postgres, below
 cd frontend && npm test           # 52 unit tests
 cd frontend && npm run test:e2e   # end-to-end (needs backend + OpenAI key)
 ```
@@ -234,7 +233,7 @@ It indexes [a fixed corpus](backend/eval/corpus/) of 16 support documents, asks 
 
 ## What I'd build next
 
-In priority order: rate limiting and Postgres RLS as defense-in-depth; deletion and pagination; and an evaluation harness before any further retrieval changes, so improvements can be measured rather than assumed.
+In priority order: split the API and worker onto paid services with a persistent queue; move sessions to secure cookies with refresh-token rotation; add metrics and tracing; then evaluate answer quality and streaming rather than adding retrieval complexity by instinct.
 
 Agent orchestration (tool-calling, LangGraph) was scoped out deliberately — the retrieval and evaluation work demonstrates the same system-design thinking with less surface area to maintain.
 
@@ -262,7 +261,7 @@ a local install. `DATABASE_URL` must match.
 cd backend
 python -m venv .venv && .venv/Scripts/activate   # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-cp ../.env.example ../.env                        # then set OPENAI_API_KEY
+cp ../.env.example .env                           # then set OPENAI_API_KEY
 alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
@@ -284,6 +283,18 @@ Open http://localhost:3000.
 
 Detailed configuration is in [backend/README.md](backend/README.md) and [frontend/README.md](frontend/README.md).
 
+## Deployment
+
+The repository includes a Render Blueprint for a free portfolio deployment:
+
+- Supabase Postgres and pgvector
+- Private Supabase Storage through its S3-compatible endpoint
+- Render Key Value for Redis/RQ
+- A combined FastAPI + RQ worker service
+- A Next.js web service
+
+Follow [the Supabase and Render deployment guide](docs/11-supabase-render-deployment.md). It includes every environment variable, database-role and RLS checks, first-deploy verification, and the free-plan tradeoffs. The combined API/worker process is deliberately a demo topology because Render background-worker instances are not available on the free plan.
+
 ## Demo flow
 
 1. Open `/` — the landing page explains the product before asking for an account.
@@ -298,7 +309,7 @@ Nothing in that flow requires knowing what ingestion, indexing, or embeddings ar
 ## Repository structure
 
 ```text
-backend/           FastAPI application, SQLAlchemy models, Alembic migrations, 49 tests
+backend/           FastAPI application, SQLAlchemy models, Alembic migrations, tests
   app/api/         Versioned routes and dependencies
   app/services/    Business logic
   app/ingestion/   Text extraction and chunking
@@ -309,7 +320,7 @@ frontend/          Next.js App Router application
   src/components/  Layout, marketing, onboarding, dashboard, knowledge, documents, chat, settings
   src/lib/         API client, auth, terminology
   tests/           Vitest unit tests and the Playwright flow
-docs/              Architecture, schema, decisions (32 ADRs), redesign write-up
+docs/              Architecture, schema, decisions (50 ADRs), deployment guide
 ```
 
 ## Documentation
@@ -317,7 +328,8 @@ docs/              Architecture, schema, decisions (32 ADRs), redesign write-up
 - [Architecture](docs/architecture.md) · [Database schema](docs/03-database-schema.md) · [API design](docs/api-design.md)
 - [Auth and tenancy](docs/04-auth-tenancy.md) · [Upload](docs/05-document-upload.md) · [Ingestion](docs/07-document-ingestion.md) · [Indexing](docs/08-embedding-indexing.md) · [RAG chat](docs/09-rag-chat.md)
 - [Frontend redesign](docs/10-frontend-redesign.md) — terminology mapping, flows, and the full limitations list
-- [Architecture decisions](docs/06-decisions.md) — 32 ADRs
+- [Supabase and Render deployment](docs/11-supabase-render-deployment.md) — free demo setup, verification, and troubleshooting
+- [Architecture decisions](docs/06-decisions.md) — 50 ADRs
 - [Learning notes](docs/learning-notes/) — per-phase write-ups
 
 ## Screenshots

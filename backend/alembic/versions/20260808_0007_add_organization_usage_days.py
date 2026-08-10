@@ -25,6 +25,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 POLICY_NAME = "tenant_isolation"
+TENANT_TABLES = ("organization_usage_days",)
 PREDICATE = (
     "organization_id = "
     "nullif(current_setting('app.current_organization_id', true), '')::uuid"

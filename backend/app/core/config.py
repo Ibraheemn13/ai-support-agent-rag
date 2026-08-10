@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(default="change-me-in-development", alias="JWT_SECRET_KEY")
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     access_token_expire_minutes: int = Field(default=60, alias="ACCESS_TOKEN_EXPIRE_MINUTES", gt=0)
+    # Long-lived on purpose: it is revocable, rotated on every use, and never
+    # sent anywhere but the refresh endpoint. The access token stays short so
+    # that a stolen one expires on its own.
+    refresh_token_expire_days: int = Field(
+        default=30,
+        alias="REFRESH_TOKEN_EXPIRE_DAYS",
+        gt=0,
+    )
     upload_dir: Path = Field(default=Path("storage/uploads"), alias="UPLOAD_DIR")
     # Local disk keeps development frictionless. Deployments use the same
     # service interface with private S3-compatible storage, because Render's

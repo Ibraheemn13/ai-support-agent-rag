@@ -32,6 +32,7 @@ from app.models.conversation import (
 from app.models.document import Document, DocumentChunk
 from app.models.knowledge_base import KnowledgeBase
 from app.models.organization import Organization, OrganizationMember
+from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.models.types import Vector
 from app.models.usage import OrganizationUsageDay
@@ -113,6 +114,7 @@ test_tables = [
     MessageCitation.__table__,
     MessageFeedback.__table__,
     OrganizationUsageDay.__table__,
+    RefreshToken.__table__,
 ]
 
 

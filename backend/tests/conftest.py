@@ -23,7 +23,12 @@ from app.embeddings.indexing import index_document
 from app.main import app
 from app.models.base import Base
 from app.ingestion.pipeline import ingest_document
-from app.models.conversation import Conversation, Message, MessageCitation
+from app.models.conversation import (
+    Conversation,
+    Message,
+    MessageCitation,
+    MessageFeedback,
+)
 from app.models.document import Document, DocumentChunk
 from app.models.knowledge_base import KnowledgeBase
 from app.models.organization import Organization, OrganizationMember
@@ -106,6 +111,7 @@ test_tables = [
     Conversation.__table__,
     Message.__table__,
     MessageCitation.__table__,
+    MessageFeedback.__table__,
     OrganizationUsageDay.__table__,
 ]
 
@@ -136,6 +142,7 @@ def db() -> Session:
 @pytest.fixture(autouse=True)
 def temporary_upload_directory(tmp_path):
     original_upload_dir = settings.upload_dir
+    original_storage_backend = settings.storage_backend
     original_max_size = settings.max_upload_size_mb
     original_auto_ingest = settings.auto_ingest_on_upload
     original_chunk_size = settings.chunk_size
@@ -159,6 +166,7 @@ def temporary_upload_directory(tmp_path):
     settings.rate_limit_auth_max_requests = 1000
     settings.rate_limit_chat_max_requests = 1000
     settings.upload_dir = tmp_path / "uploads"
+    settings.storage_backend = "local"
     settings.max_upload_size_mb = 10
     settings.auto_ingest_on_upload = False
     settings.chunk_size = 1200
@@ -171,6 +179,7 @@ def temporary_upload_directory(tmp_path):
         yield
     finally:
         settings.upload_dir = original_upload_dir
+        settings.storage_backend = original_storage_backend
         settings.max_upload_size_mb = original_max_size
         settings.auto_ingest_on_upload = original_auto_ingest
         settings.chunk_size = original_chunk_size

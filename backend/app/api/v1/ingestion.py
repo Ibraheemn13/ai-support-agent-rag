@@ -17,6 +17,7 @@ from app.services.ingestion_service import (
     DocumentIngestionInProgressError,
     IngestionDocumentNotFoundError,
     IngestionFileNotFoundError,
+    IngestionStorageUnavailableError,
     IngestionService,
 )
 
@@ -54,6 +55,11 @@ def schedule_document_ingestion(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Document file is missing from storage",
+        )
+    except IngestionStorageUnavailableError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Document storage is temporarily unavailable",
         )
     except DocumentAlreadyIngestedError:
         raise HTTPException(

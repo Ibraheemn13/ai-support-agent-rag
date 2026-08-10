@@ -43,6 +43,19 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     access_token_expire_minutes: int = Field(default=60, alias="ACCESS_TOKEN_EXPIRE_MINUTES", gt=0)
     upload_dir: Path = Field(default=Path("storage/uploads"), alias="UPLOAD_DIR")
+    # Local disk keeps development frictionless. Deployments use the same
+    # service interface with private S3-compatible storage, because Render's
+    # free filesystem is ephemeral and the API and worker need the same bytes.
+    storage_backend: str = Field(default="local", alias="STORAGE_BACKEND")
+    s3_endpoint_url: str | None = Field(default=None, alias="S3_ENDPOINT_URL")
+    s3_region: str = Field(default="us-east-1", alias="S3_REGION")
+    s3_bucket: str | None = Field(default=None, alias="S3_BUCKET")
+    s3_access_key_id: str | None = Field(default=None, alias="S3_ACCESS_KEY_ID")
+    s3_secret_access_key: str | None = Field(
+        default=None,
+        alias="S3_SECRET_ACCESS_KEY",
+    )
+    s3_prefix: str = Field(default="uploads", alias="S3_PREFIX")
     max_upload_size_mb: int = Field(default=10, alias="MAX_UPLOAD_SIZE_MB", gt=0)
     # Off by default: preparation is an explicit action via the prepare
     # endpoint, which owns the whole extract-then-index lifecycle. Starting
@@ -199,6 +212,32 @@ class Settings(BaseSettings):
             raise ValueError("CHUNK_OVERLAP must be smaller than CHUNK_SIZE")
         self.embedding_provider = self.embedding_provider.strip().lower()
         self.chat_provider = self.chat_provider.strip().lower()
+        self.storage_backend = self.storage_backend.strip().lower()
+        self.s3_prefix = self.s3_prefix.strip().strip("/")
+        if self.storage_backend not in {"local", "s3"}:
+            raise ValueError("STORAGE_BACKEND must be either 'local' or 's3'")
+        if self.storage_backend == "s3":
+            required = {
+                "S3_ENDPOINT_URL": self.s3_endpoint_url,
+                "S3_BUCKET": self.s3_bucket,
+                "S3_ACCESS_KEY_ID": self.s3_access_key_id,
+                "S3_SECRET_ACCESS_KEY": self.s3_secret_access_key,
+            }
+            missing = [name for name, value in required.items() if not value]
+            if missing:
+                raise ValueError(
+                    "S3 storage requires: " + ", ".join(missing)
+                )
+        if not self.s3_prefix:
+            raise ValueError("S3_PREFIX cannot be blank")
+        return self
+
+    @model_validator(mode="after")
+    def validate_production_secret(self) -> "Settings":
+        if not self.is_local_env and self.jwt_secret_key == "change-me-in-development":
+            raise ValueError(
+                "JWT_SECRET_KEY must be replaced outside local development"
+            )
         return self
 
     @model_validator(mode="after")

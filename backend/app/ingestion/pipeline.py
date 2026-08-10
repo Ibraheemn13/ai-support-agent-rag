@@ -6,7 +6,6 @@ import logging
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.storage import resolve_storage_path
 from app.db.session import SessionLocal
 from app.ingestion.chunking import TextChunk, chunk_document
 from app.ingestion.loaders import (
@@ -16,6 +15,7 @@ from app.ingestion.loaders import (
 )
 from app.repositories.document_chunk_repository import DocumentChunkRepository
 from app.repositories.document_repository import DocumentRepository
+from app.storage import get_storage_provider
 
 
 logger = logging.getLogger(__name__)
@@ -55,8 +55,11 @@ def ingest_document(
         if not document.file_path or not document.mime_type:
             raise TextExtractionError("Document has no stored file metadata")
 
-        file_path = resolve_storage_path(document.file_path)
-        extracted = extract_text_from_file(str(file_path), document.mime_type)
+        storage = get_storage_provider()
+        # Extractors work with paths. Remote objects are downloaded to a
+        # short-lived local file for this job and removed on context exit.
+        with storage.materialize(document.file_path) as file_path:
+            extracted = extract_text_from_file(str(file_path), document.mime_type)
         extracted_chunks = _chunk_extracted_document(
             extracted.sections,
             source=document.file_path,

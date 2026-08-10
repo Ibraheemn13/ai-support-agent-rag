@@ -12,6 +12,7 @@ from app.services.preparation_service import (
     DocumentPreparationInProgressError,
     PreparationDocumentNotFoundError,
     PreparationFileNotFoundError,
+    PreparationStorageUnavailableError,
     PreparationService,
 )
 
@@ -54,6 +55,11 @@ def prepare_document_for_chat(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Document file is missing from storage",
+        )
+    except PreparationStorageUnavailableError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Document storage is temporarily unavailable",
         )
     except DocumentPreparationInProgressError:
         raise HTTPException(

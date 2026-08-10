@@ -1,3 +1,4 @@
+import logging
 import uuid
 from collections.abc import Sequence
 from pathlib import Path
@@ -7,13 +8,22 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.storage import resolve_storage_path
 from app.documents.cleanup import remove_files
 from app.models.document import Document
 from app.repositories.document_repository import DocumentRepository
 from app.repositories.knowledge_base_repository import KnowledgeBaseRepository
 from app.schemas.document import DocumentPage, DocumentResponse
 from app.schemas.pagination import decode_cursor, encode_cursor
+from app.storage import (
+    StorageError,
+    StorageInvalidUploadError,
+    StorageLocatorError,
+    StorageObjectNotFoundError,
+    StorageProvider,
+    StorageStream,
+    StorageUploadTooLargeError,
+    get_storage_provider,
+)
 
 
 SUPPORTED_FILE_EXTENSIONS = {
@@ -22,7 +32,7 @@ SUPPORTED_FILE_EXTENSIONS = {
     "text/markdown": {".md", ".markdown"},
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {".docx"},
 }
-UPLOAD_CHUNK_SIZE = 1024 * 1024
+logger = logging.getLogger(__name__)
 
 
 class DocumentNotFoundError(Exception):
@@ -54,9 +64,9 @@ class DocumentFileUnavailableError(Exception):
 
     Distinct from `DocumentNotFoundError` because the two need different
     answers: one means "no such document", the other means "this document is
-    real, and the file behind it is gone". Uploads currently live on the
-    container filesystem, so every file disappears on a restart — the caller
-    has to be able to say that rather than claim the document never existed.
+    real, and the file behind it is gone". The provider can be local disk or
+    private object storage; either can lose an object independently of its
+    database row, so the caller must report that state accurately.
     """
 
 
@@ -71,10 +81,11 @@ class DocumentBusyError(Exception):
 
 
 class DocumentService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, storage: StorageProvider | None = None) -> None:
         self.db = db
         self.documents = DocumentRepository(db)
         self.knowledge_bases = KnowledgeBaseRepository(db)
+        self.storage = storage or get_storage_provider()
 
     async def upload(
         self,
@@ -93,23 +104,24 @@ class DocumentService:
         original_name, extension, mime_type = self._validate_file(file)
         document_title = self._normalize_title(title, original_name)
         stored_name = f"{uuid.uuid4().hex}{extension}"
-        upload_root = Path(settings.upload_dir)
-        configured_path = (
-            upload_root
-            / str(organization_id)
-            / str(knowledge_base_id)
-            / stored_name
+        locator = self.storage.make_locator(
+            str(organization_id),
+            str(knowledge_base_id),
+            stored_name,
         )
-        stored_path = resolve_storage_path(configured_path)
 
         try:
-            stored_path.parent.mkdir(parents=True, exist_ok=True)
-            await self._write_file(file, stored_path)
-        except (InvalidUploadError, UploadTooLargeError):
-            stored_path.unlink(missing_ok=True)
-            raise
-        except OSError as exc:
-            stored_path.unlink(missing_ok=True)
+            await self.storage.save_upload(
+                file,
+                locator,
+                content_type=mime_type,
+                max_bytes=settings.max_upload_size_mb * 1024 * 1024,
+            )
+        except StorageInvalidUploadError as exc:
+            raise InvalidUploadError from exc
+        except StorageUploadTooLargeError as exc:
+            raise UploadTooLargeError from exc
+        except StorageError as exc:
             raise DocumentStorageError from exc
         finally:
             await file.close()
@@ -120,13 +132,21 @@ class DocumentService:
                 knowledge_base_id=knowledge_base_id,
                 title=document_title,
                 file_name=original_name,
-                file_path=configured_path.as_posix(),
+                # A local path in development, an object key in production.
+                file_path=locator,
                 mime_type=mime_type,
             )
             self.db.commit()
         except SQLAlchemyError:
             self.db.rollback()
-            stored_path.unlink(missing_ok=True)
+            try:
+                self.storage.delete_many([locator])
+            except StorageError:
+                logger.warning(
+                    "Could not remove an upload after its database write failed",
+                    exc_info=True,
+                    extra={"storage_locator": locator},
+                )
             raise
         self.db.refresh(document)
         return document
@@ -196,15 +216,13 @@ class DocumentService:
         *,
         organization_id: uuid.UUID,
         document_id: uuid.UUID,
-    ) -> tuple[Document, Path]:
-        """Locate the stored upload behind a document, for serving back.
+    ) -> tuple[Document, StorageStream]:
+        """Open the private upload for an authenticated API response.
 
-        The path is read from the database and then checked to be inside the
-        upload root before it is opened. That check is not defending against
-        today's writer — `upload` builds the path itself from generated UUIDs —
-        but against this column ever carrying a value it did not write. A
-        filesystem read assembled from a database string is exactly the shape
-        of a path traversal, and the containment check costs one comparison.
+        The provider validates the database locator before opening anything.
+        The API proxies private bytes instead of exposing a public object URL,
+        so the same organization membership check protects local and cloud
+        storage.
         """
         document = self.get(
             organization_id=organization_id,
@@ -213,14 +231,14 @@ class DocumentService:
         if not document.file_path:
             raise DocumentFileUnavailableError
 
-        upload_root = resolve_storage_path(settings.upload_dir)
-        stored_path = resolve_storage_path(document.file_path)
-        if not stored_path.is_relative_to(upload_root):
-            raise DocumentFileUnavailableError
-        if not stored_path.is_file():
-            raise DocumentFileUnavailableError
+        try:
+            stream = self.storage.open_stream(document.file_path)
+        except (StorageObjectNotFoundError, StorageLocatorError) as exc:
+            raise DocumentFileUnavailableError from exc
+        except StorageError as exc:
+            raise DocumentStorageError from exc
 
-        return document, stored_path
+        return document, stream
 
     def delete(
         self,
@@ -262,16 +280,3 @@ class DocumentService:
         if not normalized or len(normalized) > 255:
             raise InvalidUploadError
         return normalized
-
-    @staticmethod
-    async def _write_file(file: UploadFile, stored_path: Path) -> None:
-        max_bytes = settings.max_upload_size_mb * 1024 * 1024
-        bytes_written = 0
-        with stored_path.open("xb") as destination:
-            while chunk := await file.read(UPLOAD_CHUNK_SIZE):
-                bytes_written += len(chunk)
-                if bytes_written > max_bytes:
-                    raise UploadTooLargeError
-                destination.write(chunk)
-        if bytes_written == 0:
-            raise InvalidUploadError

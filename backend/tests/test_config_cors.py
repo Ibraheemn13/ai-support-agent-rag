@@ -14,7 +14,13 @@ from pydantic import ValidationError
 from app.core.config import Settings
 
 
-def make_settings(*, app_env: str | None = None, frontend_origin: str | None = None) -> Settings:
+def make_settings(
+    *,
+    app_env: str | None = None,
+    frontend_origin: str | None = None,
+    jwt_secret_key: str = "a-secure-test-secret",
+    **overrides: str,
+) -> Settings:
     """Build a `Settings` instance from just the two fields under test.
 
     `Settings` fields use an alias (`FRONTEND_ORIGIN`, not `frontend_origin`)
@@ -23,7 +29,7 @@ def make_settings(*, app_env: str | None = None, frontend_origin: str | None = N
     `_env_file=None` keeps a real `backend/.env` on a developer's machine
     from leaking into what should be an isolated test.
     """
-    kwargs: dict[str, str] = {}
+    kwargs: dict[str, str] = {"JWT_SECRET_KEY": jwt_secret_key, **overrides}
     if app_env is not None:
         kwargs["APP_ENV"] = app_env
     if frontend_origin is not None:
@@ -100,3 +106,31 @@ def test_a_non_local_environment_with_an_origin_starts_cleanly():
     )
 
     assert settings.frontend_origins == ["https://app.example.com"]
+
+
+def test_a_non_local_environment_rejects_the_development_jwt_secret():
+    with pytest.raises(ValidationError, match="JWT_SECRET_KEY"):
+        make_settings(
+            app_env="production",
+            frontend_origin="https://app.example.com",
+            jwt_secret_key="change-me-in-development",
+        )
+
+
+def test_s3_storage_requires_its_credentials():
+    with pytest.raises(ValidationError, match="S3 storage requires"):
+        make_settings(STORAGE_BACKEND="s3")
+
+
+def test_complete_s3_storage_configuration_is_accepted():
+    configured = make_settings(
+        STORAGE_BACKEND="S3",
+        S3_ENDPOINT_URL="https://example.storage.local/s3",
+        S3_BUCKET="documents",
+        S3_ACCESS_KEY_ID="key",
+        S3_SECRET_ACCESS_KEY="secret",
+        S3_PREFIX="/supportmind/",
+    )
+
+    assert configured.storage_backend == "s3"
+    assert configured.s3_prefix == "supportmind"

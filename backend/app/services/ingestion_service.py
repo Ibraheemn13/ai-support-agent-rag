@@ -2,9 +2,9 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from app.core.storage import resolve_storage_path
 from app.models.document import Document
 from app.repositories.document_repository import DocumentRepository
+from app.storage import StorageError, get_storage_provider
 
 
 class IngestionDocumentNotFoundError(Exception):
@@ -12,6 +12,10 @@ class IngestionDocumentNotFoundError(Exception):
 
 
 class IngestionFileNotFoundError(Exception):
+    pass
+
+
+class IngestionStorageUnavailableError(Exception):
     pass
 
 
@@ -41,7 +45,14 @@ class IngestionService:
         )
         if document is None:
             raise IngestionDocumentNotFoundError
-        if not document.file_path or not resolve_storage_path(document.file_path).is_file():
+        try:
+            file_exists = bool(
+                document.file_path
+                and get_storage_provider().exists(document.file_path)
+            )
+        except StorageError as exc:
+            raise IngestionStorageUnavailableError from exc
+        if not file_exists:
             raise IngestionFileNotFoundError
         if document.status == "processing":
             raise DocumentIngestionInProgressError

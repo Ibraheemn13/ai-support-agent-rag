@@ -1,5 +1,6 @@
 import uuid
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import (
     APIRouter,
@@ -12,8 +13,9 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from starlette.background import BackgroundTask
 
 from app.api.deps import (
     IngestionRunner,
@@ -88,7 +90,7 @@ async def upload_document(
         )
     except DocumentStorageError:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Could not store the uploaded document",
         )
     if settings.auto_ingest_on_upload:
@@ -171,22 +173,22 @@ def get_document_file(
         OrganizationMember,
         Depends(require_organization_member),
     ],
-) -> FileResponse:
+) -> StreamingResponse:
     """Serve the original upload back, for reading in the browser.
 
     Any member may read it: the file is already the source of the answers the
     same member can ask for, so withholding it would protect nothing.
     """
     try:
-        document, path = DocumentService(db).open_file(
+        document, stream = DocumentService(db).open_file(
             organization_id=organization_id,
             document_id=document_id,
         )
     # Both failures carry no-store because 404 and 410 are cacheable by
     # default (RFC 9110). Observed: a browser pinned a 410 and went on
     # reporting the file as gone after it had been restored — which is the
-    # normal case here, not a corner one, since a re-upload or a move to
-    # object storage brings the bytes back under the same document id.
+    # normal recovery case when the object is restored without replacing its
+    # database row.
     except DocumentNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -204,28 +206,33 @@ def get_document_file(
             ),
             headers={"Cache-Control": "no-store"},
         )
+    except DocumentStorageError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Document storage is temporarily unavailable",
+            headers={"Cache-Control": "no-store"},
+        )
 
-    return FileResponse(
-        path,
+    filename = document.file_name or document.title
+    return StreamingResponse(
+        stream.chunks,
         media_type=document.mime_type or "application/octet-stream",
-        filename=document.file_name or f"{document.title}",
         # Inline so the browser renders it instead of downloading it. That
         # means serving bytes a user uploaded, from our own origin, under a
         # type we recorded at upload from the client's own claim — so pin the
         # type down. Without nosniff a .txt full of markup can be sniffed as
         # HTML and run as this origin.
-        content_disposition_type="inline",
         headers={
+            "Content-Disposition": (
+                f"inline; filename*=UTF-8''{quote(filename, safe='')}"
+            ),
             "X-Content-Type-Options": "nosniff",
             # One tenant's documents, on an endpoint whose only gate is an
-            # Authorization header. `FileResponse` sends an etag and a
-            # last-modified date and no cache directive, which leaves a browser
-            # free to store the bytes and reuse them heuristically — observed
-            # doing exactly that, still serving a document whose file had been
-            # deleted. `private` keeps it out of any shared cache; `no-store`
-            # keeps a tenant's file off disk entirely.
+            # Authorization header. `private` keeps it out of shared caches;
+            # `no-store` prevents a tenant's file being retained by the browser.
             "Cache-Control": "private, no-store",
         },
+        background=BackgroundTask(stream.close),
     )
 
 

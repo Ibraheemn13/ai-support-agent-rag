@@ -1,76 +1,41 @@
-"""Removing uploaded files once their rows are gone.
+"""Best-effort upload cleanup after database rows are committed away.
 
-Always after the database commit, never before. The two stores cannot be
-deleted atomically, so the ordering is a choice about which inconsistency to
-prefer: a file with no row is invisible to the application and costs disk, a
-row with no file is a document that opens to nothing. The first is a cleanup
-problem, the second is data loss, so files go second and a failure to remove
-one is logged rather than raised.
+The database and object store cannot commit atomically. Deleting the row first
+prefers an invisible orphaned object over a visible row whose bytes were lost.
+Cleanup failures are logged and never undo the successful database deletion.
 """
 
 import logging
-import shutil
-from pathlib import Path
 
-from app.core.config import settings
-from app.core.storage import resolve_storage_path
+from app.storage import StorageError, get_storage_provider
 
 
 logger = logging.getLogger(__name__)
 
 
-def _is_inside_upload_root(path: Path) -> bool:
-    """Whether a path really is under the configured upload directory.
-
-    `file_path` is a column, and a column is data. Resolving it and checking
-    containment means a bad value deletes nothing instead of reaching outside
-    the upload tree.
-    """
-    root = resolve_storage_path(settings.upload_dir)
-    return path == root or root in path.parents
-
-
 def remove_files(file_paths: list[str]) -> None:
-    for file_path in file_paths:
-        if not file_path:
-            continue
-        resolved = resolve_storage_path(file_path)
-        if not _is_inside_upload_root(resolved):
-            logger.warning(
-                "Refusing to delete a file outside the upload directory",
-                extra={"path": str(resolved)},
-            )
-            continue
-        try:
-            resolved.unlink(missing_ok=True)
-        except OSError:
-            logger.warning(
-                "Could not delete uploaded file",
-                exc_info=True,
-                extra={"path": str(resolved)},
-            )
+    locators = [locator for locator in file_paths if locator]
+    if not locators:
+        return
+    try:
+        get_storage_provider().delete_many(locators)
+    except StorageError:
+        logger.warning(
+            "Could not delete uploaded files",
+            exc_info=True,
+            extra={"storage_locators": locators},
+        )
 
 
 def remove_directory(*parts: str) -> None:
-    """Remove an upload subtree — one knowledge base's, or one organization's.
-
-    Cheaper than unlinking thousands of files individually, and it takes the
-    now-empty directories with it.
-    """
-    target = resolve_storage_path(Path(settings.upload_dir).joinpath(*parts))
-    if not _is_inside_upload_root(target) or target == resolve_storage_path(
-        settings.upload_dir
-    ):
-        logger.warning(
-            "Refusing to delete a directory outside the upload directory",
-            extra={"path": str(target)},
-        )
-        return
+    """Remove one organization's or one knowledge base's upload prefix."""
+    storage = get_storage_provider()
     try:
-        shutil.rmtree(target, ignore_errors=True)
-    except OSError:
+        prefix = storage.make_locator(*parts)
+        storage.delete_prefix(prefix)
+    except StorageError:
         logger.warning(
-            "Could not delete upload directory",
+            "Could not delete upload prefix",
             exc_info=True,
-            extra={"path": str(target)},
+            extra={"storage_parts": parts},
         )

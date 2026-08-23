@@ -13,6 +13,7 @@ venv/
 .env
 .env.*
 !.env.example
+deploy/vps.env
 
 # Local databases and logs
 *.sqlite3

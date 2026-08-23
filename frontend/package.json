@@ -58,8 +58,9 @@
     "typescript": "5.9.3",
     "vitest": "^3.2.7"
   },
-  "// overrides": "Next 16.2.12 vendors postcss 8.4.31 and sharp 0.34.5, both carrying high-severity advisories with no upstream release yet. These force patched versions; remove once Next ships them itself.",
+  "// overrides": "Force patched transitive dependency versions until their parent packages ship secure releases; keep npm audit at zero.",
   "overrides": {
+    "nanoid": "^3.3.18",
     "postcss": "^8.5.25",
     "sharp": "^0.35.0"
   },

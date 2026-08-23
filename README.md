@@ -5,7 +5,7 @@
 A multi-tenant RAG application: FastAPI and Postgres/pgvector behind a Next.js product surface that never asks the user to understand retrieval, embeddings, or indexing.
 
 [![CI](https://github.com/ZakwanZahid/ai-support-agent-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/ZakwanZahid/ai-support-agent-rag/actions/workflows/ci.yml)
-![Backend tests](https://img.shields.io/badge/backend-220%20tests-brightgreen)
+![Backend tests](https://img.shields.io/badge/backend-230%20tests-brightgreen)
 ![Frontend tests](https://img.shields.io/badge/frontend-52%20tests-brightgreen)
 ![E2E](https://img.shields.io/badge/e2e-1%20flow%20(manual)-blue)
 
@@ -138,7 +138,7 @@ Answers are assembled the same way every time: embed the question, retrieve the 
 | Queue | Redis + RQ for durable document preparation |
 | Retrieval | pgvector + Postgres full-text, fused by reciprocal rank |
 | Observability | JSON logs with request correlation, per-organization token metering |
-| Tests | pytest (220) · Vitest (52) · Playwright (1 end-to-end flow) |
+| Tests | pytest (230) · Vitest (52) · Playwright (1 end-to-end flow) |
 
 ## Key engineering decisions
 
@@ -201,14 +201,14 @@ The strategy is deliberate rather than uniform: unit-test the modules whose corr
 
 | Suite | Count | What it covers |
 | --- | --- | --- |
-| pytest | 220 | Auth, tenancy, local/S3 storage, upload, ingestion, indexing, search, RAG chat, preparation, aggregates, workspace settings, queue claims and sweep, rate limiting, row-level security, deletion, pagination, chunking, rank fusion, eval scoring, logging redaction, usage metering, cost caps |
+| pytest | 230 | Auth, tenancy, local/S3 storage, upload, ingestion, indexing, search, RAG chat, preparation, aggregates, workspace settings, queue claims and sweep, rate limiting, row-level security, deletion, pagination, chunking, rank fusion, eval scoring, logging redaction, usage metering, cost caps |
 | Vitest | 52 | `terminology.ts` (100%), `api/client.ts` (91%), `StatusBadge` (100%), `ConfirmDeleteDialog` |
 | Playwright | 1 flow | Signup → onboarding → upload → prepare → ask → sourced answer |
 
 Overall unit coverage is ~7% because components and hooks are not unit-tested. Inflating that number by testing presentational markup would cost real time and prove little; the flow those components participate in is covered by the end-to-end spec instead. The end-to-end test also asserts the negative case that matters most — that no API vocabulary or UUID ever reaches the screen.
 
 ```bash
-cd backend && pytest              # 211 tests; 9 more with Postgres, below
+cd backend && pytest              # 221 tests; 9 more with Postgres, below
 cd frontend && npm test           # 52 unit tests
 cd frontend && npm run test:e2e   # end-to-end (needs backend + OpenAI key)
 ```
@@ -285,7 +285,14 @@ Detailed configuration is in [backend/README.md](backend/README.md) and [fronten
 
 ## Deployment
 
-The repository includes a Render Blueprint for a free portfolio deployment:
+**Ubuntu VPS (recommended for the Contabo deployment).** The production Compose
+stack runs Caddy, Next.js, FastAPI, a separate RQ worker, PostgreSQL/pgvector,
+Redis, persistent uploads, automatic migrations, and backups on one server.
+Follow the [Contabo Ubuntu VPS deployment guide](docs/12-contabo-vps-deployment.md)
+from DNS setup through HTTPS and ongoing updates.
+
+**Render demo.** The repository also includes a Render Blueprint for a free
+portfolio deployment:
 
 - Supabase Postgres and pgvector
 - Private Supabase Storage through its S3-compatible endpoint
@@ -329,6 +336,7 @@ docs/              Architecture, schema, decisions (50 ADRs), deployment guide
 - [Auth and tenancy](docs/04-auth-tenancy.md) · [Upload](docs/05-document-upload.md) · [Ingestion](docs/07-document-ingestion.md) · [Indexing](docs/08-embedding-indexing.md) · [RAG chat](docs/09-rag-chat.md)
 - [Frontend redesign](docs/10-frontend-redesign.md) — terminology mapping, flows, and the full limitations list
 - [Supabase and Render deployment](docs/11-supabase-render-deployment.md) — free demo setup, verification, and troubleshooting
+- [Contabo Ubuntu VPS deployment](docs/12-contabo-vps-deployment.md) — Docker, HTTPS, persistent data, backups, and operations
 - [Architecture decisions](docs/06-decisions.md) — 50 ADRs
 - [Learning notes](docs/learning-notes/) — per-phase write-ups
 

@@ -1,0 +1,206 @@
+x-backend-environment: &backend-environment
+  APP_ENV: production
+  DEBUG: "false"
+  LOG_LEVEL: INFO
+  LOG_JSON: "true"
+  FRONTEND_ORIGIN: "https://${APP_DOMAIN}"
+  DATABASE_URL: "postgresql+psycopg://supportmind_app:${APP_DB_PASSWORD}@db:5432/${POSTGRES_DB}"
+  MIGRATION_DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
+  APP_DB_ROLE: supportmind_app
+  APP_DB_PASSWORD: "${APP_DB_PASSWORD}"
+  JWT_SECRET_KEY: "${JWT_SECRET_KEY}"
+  JWT_ALGORITHM: HS256
+  ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+  REDIS_URL: redis://redis:6379/0
+  STORAGE_BACKEND: local
+  UPLOAD_DIR: storage/uploads
+  MAX_UPLOAD_SIZE_MB: "10"
+  AUTO_INGEST_ON_UPLOAD: "false"
+  CHUNK_SIZE: "1200"
+  CHUNK_OVERLAP: "200"
+  PREPARATION_QUEUE_NAME: preparation
+  PREPARATION_MAX_ATTEMPTS: "3"
+  PREPARATION_RETRY_DELAYS: 10,60,180
+  PREPARATION_STALE_AFTER_SECONDS: "900"
+  PREPARATION_JOB_TIMEOUT_SECONDS: "600"
+  RATE_LIMIT_ENABLED: "true"
+  RATE_LIMIT_AUTH_MAX_REQUESTS: "10"
+  RATE_LIMIT_AUTH_WINDOW_SECONDS: "60"
+  RATE_LIMIT_CHAT_MAX_REQUESTS: "20"
+  RATE_LIMIT_CHAT_WINDOW_SECONDS: "60"
+  DAILY_BUDGET_ENABLED: "true"
+  DAILY_TOKEN_BUDGET: "${DAILY_TOKEN_BUDGET:-1000000}"
+  OPENAI_API_KEY: "${OPENAI_API_KEY}"
+  EMBEDDING_PROVIDER: openai
+  EMBEDDING_MODEL: text-embedding-3-small
+  EMBEDDING_DIMENSIONS: "1536"
+  INDEX_BATCH_SIZE: "50"
+  CHAT_PROVIDER: openai
+  CHAT_MODEL: gpt-4o-mini
+  CHAT_TEMPERATURE: "0.2"
+  RAG_TOP_K: "5"
+  RAG_MAX_CONTEXT_CHARS: "12000"
+  SENTRY_DSN: "${SENTRY_DSN:-}"
+
+x-service-logging: &service-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DB}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging: *service-logging
+    networks:
+      - backend
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - "${REDIS_MAXMEMORY:-256mb}"
+      - --maxmemory-policy
+      - noeviction
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *service-logging
+    networks:
+      - backend
+
+  migrate:
+    build:
+      context: ./backend
+    environment: *backend-environment
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+    logging: *service-logging
+    networks:
+      - backend
+    restart: "no"
+
+  api:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment: *backend-environment
+    volumes:
+      - uploads:/srv/storage/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    logging: *service-logging
+    networks:
+      - edge
+      - backend
+
+  worker:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment: *backend-environment
+    command: ["python", "worker.py"]
+    volumes:
+      - uploads:/srv/storage/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    logging: *service-logging
+    networks:
+      - backend
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: "https://${API_DOMAIN}"
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    logging: *service-logging
+    networks:
+      - edge
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: "${APP_DOMAIN}"
+      API_DOMAIN: "${API_DOMAIN}"
+      ACME_EMAIL: "${ACME_EMAIL}"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_started
+      api:
+        condition: service_healthy
+    logging: *service-logging
+    networks:
+      - edge
+
+networks:
+  edge:
+    driver: bridge
+  backend:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    name: supportmind_postgres_data
+  redis_data:
+    name: supportmind_redis_data
+  uploads:
+    name: supportmind_uploads
+  caddy_data:
+    name: supportmind_caddy_data
+  caddy_config:
+    name: supportmind_caddy_config

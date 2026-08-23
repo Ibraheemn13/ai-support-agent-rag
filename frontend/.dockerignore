@@ -1,0 +1,7 @@
+.env.local
+.next/
+coverage/
+node_modules/
+test-results/
+tests/
+*.tsbuildinfo

@@ -171,9 +171,7 @@ services:
       API_DOMAIN: "${API_DOMAIN}"
       ACME_EMAIL: "${ACME_EMAIL}"
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+      - "127.0.0.1:8020:80"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

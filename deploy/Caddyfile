@@ -1,8 +1,4 @@
-{
-	email {$ACME_EMAIL}
-}
-
-{$APP_DOMAIN} {
+http://{$APP_DOMAIN} {
 	encode zstd gzip
 	header {
 		-Server
@@ -12,7 +8,7 @@
 	reverse_proxy frontend:3000
 }
 
-{$API_DOMAIN} {
+http://{$API_DOMAIN} {
 	encode zstd gzip
 	header {
 		-Server
